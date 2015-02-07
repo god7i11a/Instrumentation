@@ -9,7 +9,7 @@
 # included with this distribution.
 #
 # Current status:
-# Version 0.1 -- 6 Feb 2015 first version, uses serial interface, will do USB and GPIB later.
+# Version 0.1 -- 6/7 Feb 2015 first version, uses serial interface, will do USB and GPIB later.
 #                starting with TDS 2024, probably useful for many others
 #
 #
@@ -19,7 +19,7 @@
 
 
 
-from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure
 from numpy import array
 from string import split, upper
 from time import sleep
@@ -28,6 +28,8 @@ from serial import Serial   # we don't need no steenkin' VISA
 
 # how long to sleep after issuing a write
 sleeptime = 0.01
+
+mNAN = 9.9e+37  # Tektronic "not a number"
 
 class Measurement(object):
     """
@@ -39,38 +41,51 @@ class Measurement(object):
     MEASUrement:IMMed:TYPe { FREQuency | MEAN | PERIod |PHAse | PK2pk | CRMs | MINImum | MAXImum | RISe | FALL | PWIdth | NWIdth }
     """
     mtypeT = ('FREQ', 'MEAN', 'PERI', 'PHA', 'PK2', 'CRM', 'MINI', 'MAXI', 'RIS', 'FALL', 'PWI', 'NWI')
+    isReset=False
+    
     def __init__(self, mreader):
         self._immed=mreader
+        self.reset()
+        self.measL=()
 
-    def __call__(self, key):
+    def getMeasStrL(self):
+        return {m: getattr(self, m.lower()+'Str') for m in self.measL}        
+    def getMeasL(self):
+        return [getattr(self, m.lower()+'Str') for m in self.measL]
+
+    def __call__(self, keyL):
         # this acquires the actual reading
         # we are not doiing the units, for now
-        if key not in self.mtypeT:
-            raise ValueError('Channel does not support %s IMMed TYPe'%key)
+        self.reset() # might not want to reset if we have new vals!!!
+        self.measL = tuple( map(upper, keyL) )
+        for key in self.measL:
+            if key not in self.mtypeT:
+                raise ValueError('Channel does not support %s IMMed TYPe'%key)
         
-        val = self._immed(key)
-        # dropcase
-        key = key.lower()
-        # store raw as attr
-        setattr(self, key, val)
-        
-        # we make nice strings for later retrieval
-        # means data is acquired throu call() and retrived via attribute
-        attrN = '_'+key+'Str'
-        func = getattr(self, attrN)
-        func(val)
+            val = self._immed(key)
+            # dropcase
+            key = key.lower()
+            # store raw as attr
+            setattr(self, key, val)
+            
+            # we make nice strings for later retrieval
+            # means data is acquired throu call() and retrived via attribute
+            attrN = '_'+key+'Str'
+            func = getattr(self, attrN)
+            func(val)
+        self.isReset=False # we have readings
 
     # these convenience funcs could really be classified according to the UNIT of the measurement.
-    #so Volts, seconds, and Hz. 
+    # so Volts, seconds, and Hz. 
     def _pk2Str(self, val):
-        if val != 9.9E37:
+        if val != mNAN:
             peak_string = 'Pk-Pk: %.3f V' % (val)
-        else: peak_string = ''
+        else: peak_string = 'Pk-Pk: ***'
         self.pk2Str = peak_string
     def _meanStr(self, val):
-        if val != 9.9E37:
+        if val != mNAN:
             mean_string = 'Mean: %.3f V' % (val)
-        else: mean_string = ''
+        else: mean_string = 'Mean: ***'
         self.meanStr = mean_string
     def _periStr(self, val):
         if val >= 1:
@@ -85,9 +100,9 @@ class Measurement(object):
                 if val < 0.000001:
                     period_val = val * 10e8
                     period_suf = "nS"
-        if val != 9.9E37:
+        if val != mNAN:
             period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
-        else: period_string = ''
+        else: period_string = 'Period: ****'
         self.periStr = period_string
     def _freqStr(self,val):
         if val < 1e3:
@@ -99,18 +114,30 @@ class Measurement(object):
         if val >= 1e6:
             freq_val = val / 10e5
             freq_suf = "MHz"
-        
-        if val != 9.9E37:
+        if val != mNAN:
             freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
-        else: freq_string = ''
+        else: freq_string = 'Freq: ***'
         self.freqStr = freq_string
-                
+    def _risStr(self,val):
+        if val != mNAN:
+            self.risStr = 'RISe: %f s'%val
+        else: self.risStr = 'RISe: ***'
+    def _fallStr(self,val):
+        if val != mNAN:
+            self.fallStr = 'FALL: %f s'%val
+        else: self.fallStr = 'FALL: ***'
+
+    def reset(self):
+        if not self.isReset:
+            # reset all values
+            for typ in self.mtypeT:
+                setattr(self, typ.lower(), mNAN)
+                setattr(self, typ.lower()+'_Str', '********')            
+        self.isReset=True
 
 class Channel(object):
     wfmD = {}
     wfmFuncD = {'BYT_NR':int,
-                'UNIT': None,
-                'BYT_NR': int,
                 'BIT_NR': int,
                 'ENCDG': None,  # ASC | BIN
                 'BN_FMT': None,
@@ -158,16 +185,12 @@ class Channel(object):
 
     def acqMeas(self, mL):
         # acquire some measurements, available later as self.getMeasurements()
-        self.measReqL=mL
-        for m in mL:
-            self._msmnt(m.upper())
+        self._msmnt(mL)
 
-    def getMeas(self, m):
-        return getattr(self._msmnt, m.lower())
-    def getMeasStr(self, m):
-        return getattr(self._msmnt, m.lower()+'Str')
+    def getMeasL(self):
+        return self._msmnt.getMeasL()
     def getMeasStrL(self):
-        return [self.getMeasStr(m) for m in self.measReqL]
+        return self._msmnt.getMeasStrL()
 
     def wfmpreQ(self):
         tmp=self._instr.query('wfmpre?')
@@ -205,18 +228,17 @@ class Channel(object):
         tmp=self._instr.read(self.wfmD['BYT_NR']*points+1) #newline at end???
 
         formatstring = '%ib' % (len(tmp))   # does this assume BYT_NR==1???
-        tmplist = unpack(formatstring,tmp)
+        tmplist = unpack(formatstring,tmp)[:-1] # there's a newline at the end of the data, thus the strange slice
         
         yoff = self.wfmD['YOFF']
         ymult = self.wfmD['YMULT']
         yzero = self.wfmD['YZERO']
         points = self.wfmD['NR_PT']
-        trace = []
-        # there's a newline at the end of the data, thus the strange slice
-        for x in tmplist[0:-1]:
-            trace.append( ( int(x) - yoff) * ymult + yzero )
-        self.trace = array(trace)
-        if self._instr._debug: print trace
+        tmp = array( map(int, tmplist) )
+        self.trace =  (tmp - yoff) * ymult + yzero
+        self.trace_undisplaced = 2*tmp*ymult    # uhhh, why 2*   ????????
+            
+        if self._instr._debug: print self.trace
 
 class TDS2024(Serial):
     """
@@ -316,16 +338,17 @@ class TDS2024(Serial):
         sweep_val = '%.f' % sweep_val
         self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
             
-    def plot_reticule(self):
+    def plotChannelReticule(self, chN):
         # was the original idea of predecessor, i need to think through how to do it generically.
         # the idea would be to make the plot look like the scope window. wooopie!!!
-        points=self.points
-        voltsdiv = self.voltsdiv
+        figure(4+chN)
+        chan = self.getChannel(chN)        
+        points=chan.points
 
-        plot(self.trace)
-        axis([0,points,-5*voltsdiv,5*voltsdiv])
+        plot(chan.trace_undisplaced)  # need to go back to the earlier form of the trace, see tds2012.py
+        axis([0,points,-4,4])
         xlabel(self.sweepStr)
-        ylabel(self.voltStr)
+        ylabel(chan.voltStr)
         theaxes = gca()
         theaxes.set_xticklabels([])
         if not theaxes.is_first_col():
@@ -334,15 +357,22 @@ class TDS2024(Serial):
             theaxes.set_xticklabels([])
         grid(1)
 
-        text(0.03*points,-4.9*voltsdiv, self.peakStr)
-        text(0.03*points,-4.4*voltsdiv, self.meanStr)
-        text(0.72*points,-4.93*voltsdiv, self.freqStr)
-        text(0.72*points,-4.4*voltsdiv, self.periodStr)
-        
-        show()
+        mstr = chan.getMeasStrL().values()
+        posL = ( (0.03*points,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
+                 (0.03*points,-3.9),
+                 (0.72*points,-3.4),
+                 (0.72*points,-3.9)
+                 )
 
-    def plot(self, chN):
-        # plain ole plot
+        for m, pos in zip(mstr, posL):
+            text( pos[0], pos[1], m )        
+
+        show()
+        
+    def plotChannel(self, chN):
+        # plain ole plot, single channel
+        # have to figure out how to generically combine channels and measurements
+        figure(chN)
         chan = self.getChannel(chN)
         
         points=chan.points
@@ -365,20 +395,24 @@ class TDS2024(Serial):
             theaxes.set_xticklabels([])
         grid(1)
 
+        # need some way to generically grab the measurements requested earlier
+        mstr = chan.getMeasStrL().values()
         low=0.02
         high=0.07
-        # need some way to generically grab the measurements requested earlier
-        mstr = chan.getMeasStrL()
-        text(0.03*points,miny+low*vrange, mstr[0])
-        text(0.03*points,miny+high*vrange, mstr[1])
-        text(0.72*points,miny+low*vrange, mstr[2])
-        text(0.72*points,miny+high*vrange, mstr[3])
-        
+        posL = ( (0.03*points,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
+                 (0.03*points,miny+low*vrange) ,
+                 (0.72*points,miny+high*vrange),
+                 (0.72*points,miny+low*vrange)
+                 )
+
+        for m, pos in zip(mstr, posL):
+            text( pos[0], pos[1], m )
+
         show()
-        
         
 if __name__ == '__main__':
     tds2024 = TDS2024(debug=True)
-    acqL =  ( (3,('PK2', 'MEAN', 'FREQ', 'PERI')), )
+    acqL =  ( (3,('PK2', 'PERI', 'FALL', 'RIS')), )
     tds2024.acquire(acqL )
-    tds2024.plot(3)
+    tds2024.plotChannel(3)
+    tds2024.plotChannelReticule(3)
