@@ -19,15 +19,92 @@
 
 
 
-from matplotlib.pylab import plot, axis, xlabel, ylabel, gca, grid, text, show
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show
 from numpy import array
-from string import split
+from string import split, upper
 from time import sleep
 from struct import unpack
 from serial import Serial   # we don't need no steenkin' VISA 
 
 # how long to sleep after issuing a write
 sleeptime = 0.01
+
+class Measurement(object):
+    """
+    TODO:
+    1. do we want immediate measurements or regular?
+    2. get the associated unit, for display
+    
+    possible measurements:
+    MEASUrement:IMMed:TYPe { FREQuency | MEAN | PERIod |PHAse | PK2pk | CRMs | MINImum | MAXImum | RISe | FALL | PWIdth | NWIdth }
+    """
+    mtypeT = ('FREQ', 'MEAN', 'PERI', 'PHA', 'PK2', 'CRM', 'MINI', 'MAXI', 'RIS', 'FALL', 'PWI', 'NWI')
+    def __init__(self, mreader):
+        self._immed=mreader
+
+    def __call__(self, key):
+        # this acquires the actual reading
+        # we are not doiing the units, for now
+        if key not in self.mtypeT:
+            raise ValueError('Channel does not support %s IMMed TYPe'%key)
+        
+        val = self._immed(key)
+        # dropcase
+        key = key.lower()
+        # store raw as attr
+        setattr(self, key, val)
+        
+        # we make nice strings for later retrieval
+        # means data is acquired throu call() and retrived via attribute
+        attrN = '_'+key+'Str'
+        func = getattr(self, attrN)
+        func(val)
+
+    # these convenience funcs could really be classified according to the UNIT of the measurement.
+    #so Volts, seconds, and Hz. 
+    def _pk2Str(self, val):
+        if val != 9.9E37:
+            peak_string = 'Pk-Pk: %.3f V' % (val)
+        else: peak_string = ''
+        self.pk2Str = peak_string
+    def _meanStr(self, val):
+        if val != 9.9E37:
+            mean_string = 'Mean: %.3f V' % (val)
+        else: mean_string = ''
+        self.meanStr = mean_string
+    def _periStr(self, val):
+        if val >= 1:
+            period_val = val
+            period_suf = "S"
+        if val < 1:
+            period_val = val * 10e2
+            period_suf = "mS"
+            if val < 0.001:
+                sweep_val = val * 10e5
+                sweep_suf = "uS"
+                if val < 0.000001:
+                    period_val = val * 10e8
+                    period_suf = "nS"
+        if val != 9.9E37:
+            period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
+        else: period_string = ''
+        self.periStr = period_string
+    def _freqStr(self,val):
+        if val < 1e3:
+            freq_val = val
+            freq_suf = "Hz"
+        if val < 1e6:
+            freq_val = val / 10e2
+            freq_suf = "kHz"
+        if val >= 1e6:
+            freq_val = val / 10e5
+            freq_suf = "MHz"
+        
+        if val != 9.9E37:
+            freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
+        else: freq_string = ''
+        self.freqStr = freq_string
+                
 
 class Channel(object):
     wfmD = {}
@@ -51,10 +128,18 @@ class Channel(object):
                 'YUNIT': None #"Volts"
             }
     wfmT = wfmFuncD.keys()
+
+    # :WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT
+    # 2500;WFID "Ch3, DC coupling, 5.0E-1 V/div, 1.0E-1 s/div, 2500
+    # points, Sample mode";PT_FMT Y;XINCR 4.0E-4;PT_OFF 0;XZERO
+    # -1.0E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -1.69E2;YUNIT
+    # "Volts"
+
     
     def __init__(self, chN, instr):
         self._channel = 'CH%1d'%chN
         self._instr = instr
+        self._msmnt = Measurement(self.getImmed)
 
     def getVerticalSetting(self):
         # get instrument settings
@@ -71,55 +156,18 @@ class Channel(object):
         self._instr.cmd('measu:imm:typ %s;:measu:imm:sou %3s'%(typ,self._channel))
         return self._instr.query_float('measu:imm:val?')
 
-    def getMeasurements(self):
-        ch = self._channel        
-        # get some measurements, just for fun
+    def acqMeas(self, mL):
+        # acquire some measurements, available later as self.getMeasurements()
+        self.measReqL=mL
+        for m in mL:
+            self._msmnt(m.upper())
 
-        tmp=self.getImmed('PK2')
-        if tmp != 9.9E37:
-            peak_string = 'Pk-Pk: %.3f V' % (tmp)
-        else: peak_string = ''
-        self.peakStr = peak_string
-        
-        tmp=self.getImmed('MEAN')
-        if tmp != 9.9E37:
-            mean_string = 'Mean: %.3f V' % (tmp)
-        else: mean_string = ''
-        self.meanStr = mean_string
-        
-        tmp=self.getImmed('PERI')
-        if tmp >= 1:
-            period_val = tmp
-            period_suf = "S"
-        if tmp < 1:
-            period_val = tmp * 10e2
-            period_suf = "mS"
-            if tmp < 0.001:
-                sweep_val = tmp * 10e5
-                sweep_suf = "uS"
-                if tmp < 0.000001:
-                    period_val = tmp * 10e8
-                    period_suf = "nS"
-        if tmp != 9.9E37:
-            period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
-        else: period_string = ''
-        self.periodStr = period_string
-        
-        tmp=self.getImmed('FREQ')
-        if tmp < 1e3:
-            freq_val = tmp
-            freq_suf = "Hz"
-        if tmp < 1e6:
-            freq_val = tmp / 10e2
-            freq_suf = "kHz"
-        if tmp >= 1e6:
-            freq_val = tmp / 10e5
-            freq_suf = "MHz"
-        
-        if tmp != 9.9E37:
-            freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
-        else: freq_string = ''
-        self.freqStr = freq_string
+    def getMeas(self, m):
+        return getattr(self._msmnt, m.lower())
+    def getMeasStr(self, m):
+        return getattr(self._msmnt, m.lower()+'Str')
+    def getMeasStrL(self):
+        return [self.getMeasStr(m) for m in self.measReqL]
 
     def wfmpreQ(self):
         tmp=self._instr.query('wfmpre?')
@@ -239,13 +287,13 @@ class TDS2024(Serial):
 
     __del__ = complete
 
-    def acquire(self, chL, prepChannels=True):
+    def acquire(self, chmL, prepChannels=True):
         self.prepare()
         self.getSweepSetting()
-        for ch in chL:
+        for ch,m in chmL:
             chan = self.getChannel(ch)
             chan.getVerticalSetting()
-            chan.getMeasurements()
+            chan.acqMeas(m)
             chan.acquire(prepChannels)
         self.complete()
         
@@ -269,7 +317,7 @@ class TDS2024(Serial):
         self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
             
     def plot_reticule(self):
-        # was the original idea of predecessor, i need to think through how to do it generically
+        # was the original idea of predecessor, i need to think through how to do it generically.
         # the idea would be to make the plot look like the scope window. wooopie!!!
         points=self.points
         voltsdiv = self.voltsdiv
@@ -319,15 +367,18 @@ class TDS2024(Serial):
 
         low=0.02
         high=0.07
-        text(0.03*points,miny+low*vrange, chan.peakStr)
-        text(0.03*points,miny+high*vrange, chan.meanStr)
-        text(0.72*points,miny+low*vrange, chan.freqStr)
-        text(0.72*points,miny+high*vrange, chan.periodStr)
+        # need some way to generically grab the measurements requested earlier
+        mstr = chan.getMeasStrL()
+        text(0.03*points,miny+low*vrange, mstr[0])
+        text(0.03*points,miny+high*vrange, mstr[1])
+        text(0.72*points,miny+low*vrange, mstr[2])
+        text(0.72*points,miny+high*vrange, mstr[3])
         
         show()
         
         
 if __name__ == '__main__':
     tds2024 = TDS2024(debug=True)
-    tds2024.acquire( (3,) )
+    acqL =  ( (3,('PK2', 'MEAN', 'FREQ', 'PERI')), )
+    tds2024.acquire(acqL )
     tds2024.plot(3)
