@@ -27,10 +27,9 @@ from struct import unpack
 from serial import Serial   # we don't need no steenkin' VISA 
 
 # how long to sleep after issuing a write
-sleeptime = 0.1
+sleeptime = 0.01
 
-class TDS2024(Serial):
-    idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
+class Channel(object):
     wfmD = {}
     wfmFuncD = {'BYT_NR':int,
                 'UNIT': None,
@@ -53,25 +52,159 @@ class TDS2024(Serial):
             }
     wfmT = wfmFuncD.keys()
     
+    def __init__(self, chN, instr):
+        self._channel = 'CH%1d'%chN
+        self._instr = instr
+
+    def getVerticalSetting(self):
+        # get instrument settings
+        voltsdiv=self._instr.query_float('%3s:scale?'%self._channel)
+        
+        if voltsdiv >= 1:
+            volt_string = '%i V / div' % (voltsdiv)
+        else:
+            volt_string = '%i mv / div' % (voltsdiv * 1000)
+        self.voltStr = volt_string
+        self.voltsdiv = voltsdiv
+
+    def getImmed(self, typ):
+        self._instr.cmd('measu:imm:typ %s;:measu:imm:sou %3s'%(typ,self._channel))
+        return self._instr.query_float('measu:imm:val?')
+
+    def getMeasurements(self):
+        ch = self._channel        
+        # get some measurements, just for fun
+
+        tmp=self.getImmed('PK2')
+        if tmp != 9.9E37:
+            peak_string = 'Pk-Pk: %.3f V' % (tmp)
+        else: peak_string = ''
+        self.peakStr = peak_string
+        
+        tmp=self.getImmed('MEAN')
+        if tmp != 9.9E37:
+            mean_string = 'Mean: %.3f V' % (tmp)
+        else: mean_string = ''
+        self.meanStr = mean_string
+        
+        tmp=self.getImmed('PERI')
+        if tmp >= 1:
+            period_val = tmp
+            period_suf = "S"
+        if tmp < 1:
+            period_val = tmp * 10e2
+            period_suf = "mS"
+            if tmp < 0.001:
+                sweep_val = tmp * 10e5
+                sweep_suf = "uS"
+                if tmp < 0.000001:
+                    period_val = tmp * 10e8
+                    period_suf = "nS"
+        if tmp != 9.9E37:
+            period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
+        else: period_string = ''
+        self.periodStr = period_string
+        
+        tmp=self.getImmed('FREQ')
+        if tmp < 1e3:
+            freq_val = tmp
+            freq_suf = "Hz"
+        if tmp < 1e6:
+            freq_val = tmp / 10e2
+            freq_suf = "kHz"
+        if tmp >= 1e6:
+            freq_val = tmp / 10e5
+            freq_suf = "MHz"
+        
+        if tmp != 9.9E37:
+            freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
+        else: freq_string = ''
+        self.freqStr = freq_string
+
+    def wfmpreQ(self):
+        tmp=self._instr.query('wfmpre?')
+        # strip header :WFMPRE:
+        preamble = split(tmp[8:],';')
+        for resp in preamble:
+            name, val = resp.split(' ',1)
+            if name in self.wfmT:
+                func = self.wfmFuncD[name]
+                if func:
+                    self.wfmD[name]= func(val)
+                else:
+                    self.wfmD[name] = val
+
+        # number of points in trace
+        self.points = self.wfmD['NR_PT']
+        if self._instr._debug: print self.wfmD
+
+    def acquire(self, prepare):
+        # for ASCII read, use 'self.read(16384)' instead of the above, and 
+        # delete the next two lines.  You'll need to use 'split' to convert the 
+        # comma-delimited values returned in 'tmp' to a list of values called
+        # 'tmplist', and you may need to adjust the offsets used in the 'for' loop 
+        # to end up with the proper number of points
+
+        self._instr.cmd('DATA:SOURCE %3s'%self._channel)
+        if prepare: self.wfmpreQ()
+
+        tmp = self._instr.query('curv?', nBytes=9)
+        # header: :CURVE #42500
+        numChr = int(tmp[8])  # 4
+        tmp=self._instr.read(numChr)
+        points = int(tmp)
+        if self._instr._debug: print 'Acquiring %d points'%points
+        tmp=self._instr.read(self.wfmD['BYT_NR']*points+1) #newline at end???
+
+        formatstring = '%ib' % (len(tmp))   # does this assume BYT_NR==1???
+        tmplist = unpack(formatstring,tmp)
+        
+        yoff = self.wfmD['YOFF']
+        ymult = self.wfmD['YMULT']
+        yzero = self.wfmD['YZERO']
+        points = self.wfmD['NR_PT']
+        trace = []
+        # there's a newline at the end of the data, thus the strange slice
+        for x in tmplist[0:-1]:
+            trace.append( ( int(x) - yoff) * ymult + yzero )
+        self.trace = array(trace)
+        if self._instr._debug: print trace
+
+class TDS2024(Serial):
+    """
+    TODO ideas:
+    1. could have a channels class, and add four to this device
+    2. channels could have a set of measurements and a unique trace
+    3. could handle various kinds of trigger and setup condx to satisfy grabbing data
+    4. could autostore data (tables best for this)
+    """
+    _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
+    _channelL=[]
+    
     def __init__(self, port="/dev/ttyS0", debug=False):
         self._port = port
         self._debug = debug
         super(TDS2024,self ).__init__(port, 9600, timeout=None)
         self.sendBreak()
+        sleep(sleeptime)
         resp=self.readline()
         if resp[0:3] != 'DCL':
             raise ValueError('Serial port did not return DCL! (%s)'%resp )
         sleep(sleeptime)
         self.write('*IDN?\n')
         sleep(sleeptime)
-        while 1:
-            resp=self.readline()
-            if resp == self.idStr:
-                print resp
-                break
+        resp=self.readline()
+        if resp == self._idStr:
+            print resp
+        else:
+            raise ValueError('Failed to get instrument id (%s)'%resp)
 
-        self._channel=None
+        for i in (1,2,3,4):
+            self._channelL.append( Channel(i,self) )
 
+    def getChannel(self, chN):
+        return self._channelL[chN-1]
+    
     def query(self, req, nBytes=None):
         if self._debug:
             print "send to Serial: ", req
@@ -101,31 +234,21 @@ class TDS2024(Serial):
         self.cmd('acquire:state on')
         raw_input('Press ENTER to trigger measurement: ')
 
-    def setChannel(self, ch='CH3'):
-        if ch != self._channel:
-            self.cmd('DATA:SOURCE %3s'%ch)
-            self.wfmpreQ()
-            self._channel=ch
+    def complete(self):
+        self.cmd('acquire:state off')
 
-    def wfmpreQ(self):
-        tmp=self.query('wfmpre?')
-        # strip header :WFMPRE:
-        preamble = split(tmp[8:],';')
-        for resp in preamble:
-            name, val = resp.split(' ',1)
-            if name in self.wfmT:
-                func = self.wfmFuncD[name]
-                if func:
-                    self.wfmD[name]= func(val)
-                else:
-                    self.wfmD[name] = val
-        print self.wfmD
-        # number of points in trace
-        self.points = self.wfmD['NR_PT']
-        # volts per bit (-127 to +128)
-        voltsbit = self.wfmD['YUNIT']
-        if self._debug: print  self.wfmD['NR_PT'], self.wfmD['YUNIT']
+    __del__ = complete
 
+    def acquire(self, chL, prepChannels=True):
+        self.prepare()
+        self.getSweepSetting()
+        for ch in chL:
+            chan = self.getChannel(ch)
+            chan.getVerticalSetting()
+            chan.getMeasurements()
+            chan.acquire(prepChannels)
+        self.complete()
+        
     def getSweepSetting(self):
         tmp=self.query_float('hor:mai:sca?')
         tmp = float(tmp)
@@ -144,106 +267,7 @@ class TDS2024(Serial):
                     sweep_suf = "nS"
         sweep_val = '%.f' % sweep_val
         self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
-
-    def getVerticalSetting(self):
-        ch = self._channel
-        # get instrument settings
-        voltsdiv=self.query_float('%3s:scale?'%ch)
-        
-        if voltsdiv >= 1:
-            volt_string = '%i V / div' % (voltsdiv)
-        else:
-            volt_string = '%i mv / div' % (voltsdiv * 1000)
-        self.voltStr = volt_string
-        self.voltsdiv = voltsdiv
-
-    def _getImmed(self, typ, ch):
-        self.cmd('measu:imm:typ %s;:measu:imm:sou %3s'%(typ,ch))
-        return self.query_float('measu:imm:val?')
-
-    def getMeasurements(self):
-        ch = self._channel        
-        # get some measurements, just for fun
-
-        tmp=self._getImmed('PK2', '%3s'%ch)
-        if tmp != 9.9E37:
-            peak_string = 'Pk-Pk: %.3f V' % (tmp)
-        else: peak_string = ''
-        self.peakStr = peak_string
-        
-        tmp=self._getImmed('MEAN', '%3s'%ch)
-        if tmp != 9.9E37:
-            mean_string = 'Mean: %.3f V' % (tmp)
-        else: mean_string = ''
-        self.meanStr = mean_string
-        
-        tmp=self._getImmed('PERI', '%3s'%ch)
-        if tmp >= 1:
-            period_val = tmp
-            period_suf = "S"
-        if tmp < 1:
-            period_val = tmp * 10e2
-            period_suf = "mS"
-            if tmp < 0.001:
-                sweep_val = tmp * 10e5
-                sweep_suf = "uS"
-                if tmp < 0.000001:
-                    period_val = tmp * 10e8
-                    period_suf = "nS"
-        if tmp != 9.9E37:
-            period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
-        else: period_string = ''
-        self.periodStr = period_string
-        
-        tmp=self._getImmed('FREQ', '%3s'%ch)
-        if tmp < 1e3:
-            freq_val = tmp
-            freq_suf = "Hz"
-        if tmp < 1e6:
-            freq_val = tmp / 10e2
-            freq_suf = "kHz"
-        if tmp >= 1e6:
-            freq_val = tmp / 10e5
-            freq_suf = "MHz"
-        
-        if tmp != 9.9E37:
-            freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
-        else: freq_string = ''
-        self.freqStr = freq_string
-
-    def curve(self, ch=None):
-        # for ASCII read, use 'self.read(16384)' instead of the above, and 
-        # delete the next two lines.  You'll need to use 'split' to convert the 
-        # comma-delimited values returned in 'tmp' to a list of values called
-        # 'tmplist', and you may need to adjust the offsets used in the 'for' loop 
-        # to end up with the proper number of points
-
-        if ch:  # change channels if requested
-            self.setChannel(ch)
             
-        tmp = self.query('curv?', nBytes=9)
-        # header: :CURVE #42500
-        numChr = int(tmp[8])  # 4
-        tmp=self.read(numChr)
-        points = int(tmp)
-        if self._debug: print 'Acquiring %d points'%points
-        tmp=self.read(self.wfmD['BYT_NR']*points+1) #newline at end???
-
-        formatstring = '%ib' % (len(tmp))   # does this assume BYT_NR==1???
-        tmplist = unpack(formatstring,tmp)
-        
-        yoff = self.wfmD['YOFF']
-        ymult = self.wfmD['YMULT']
-        yzero = self.wfmD['YZERO']
-        points = self.wfmD['NR_PT']
-        trace = []
-        # there's a newline at the end of the data, thus the strange slice
-        for x in tmplist[0:-1]:
-            trace.append( ( int(x) - yoff) * ymult + yzero )
-        self.trace = array(trace)
-        if self._debug: print trace
-        self.cmd('acquire:state off')
-    
     def plot_reticule(self):
         # was the original idea of predecessor, i need to think through how to do it generically
         # the idea would be to make the plot look like the scope window. wooopie!!!
@@ -269,10 +293,12 @@ class TDS2024(Serial):
         
         show()
 
-    def plot(self):
+    def plot(self, chN):
         # plain ole plot
-        points=self.points
-        trace=self.trace
+        chan = self.getChannel(chN)
+        
+        points=chan.points
+        trace=chan.trace
         plot(trace)
         miny=trace.min()
         maxy=trace.max()
@@ -282,7 +308,7 @@ class TDS2024(Serial):
         vrange=maxy-miny
         axis([0,points,miny, maxy])
         xlabel(self.sweepStr)
-        ylabel(self.voltStr)
+        ylabel(chan.voltStr)
         theaxes = gca()
         theaxes.set_xticklabels([])
         if not theaxes.is_first_col():
@@ -293,20 +319,15 @@ class TDS2024(Serial):
 
         low=0.02
         high=0.07
-        text(0.03*points,miny+low*vrange, self.peakStr)
-        text(0.03*points,miny+high*vrange, self.meanStr)
-        text(0.72*points,miny+low*vrange, self.freqStr)
-        text(0.72*points,miny+high*vrange, self.periodStr)
+        text(0.03*points,miny+low*vrange, chan.peakStr)
+        text(0.03*points,miny+high*vrange, chan.meanStr)
+        text(0.72*points,miny+low*vrange, chan.freqStr)
+        text(0.72*points,miny+high*vrange, chan.periodStr)
         
         show()
         
         
 if __name__ == '__main__':
-    tds2024 = TDS2024()
-    tds2024.getSweepSetting()
-    tds2024.prepare()
-    tds2024.setChannel('CH3')
-    tds2024.getVerticalSetting()
-    tds2024.getMeasurements()
-    tds2024.curve()
-    tds2024.plot()
+    tds2024 = TDS2024(debug=True)
+    tds2024.acquire( (3,) )
+    tds2024.plot(3)
