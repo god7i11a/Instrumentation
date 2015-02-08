@@ -16,6 +16,8 @@
 # adapated from : http://www.febo.com/geekworks/data-capture/tds-2012.html cf. https://gist.github.com/pklaus/320584 
 # i think the previous line handles my responsibilities under GPL. am newcomer to licensing, please let me know if
 # otherwise
+#
+# see also: https://github.com/python-ivi
 
 
 
@@ -79,13 +81,18 @@ class Measurement(object):
     # so Volts, seconds, and Hz. 
     def _pk2Str(self, val):
         if val != mNAN:
-            peak_string = 'Pk-Pk: %.3f V' % (val)
-        else: peak_string = 'Pk-Pk: ***'
+            peak_string = 'PK2p: %.3f V' % (val)
+        else: peak_string = 'PK2p: ***'
         self.pk2Str = peak_string
+    def _maxiStr(self, val):
+        if val != mNAN:
+            maxi_string = 'MAXI: %.3f V' % (val)
+        else: maxi_string = 'MAXI: ***'
+        self.maxiStr = maxi_string
     def _meanStr(self, val):
         if val != mNAN:
-            mean_string = 'Mean: %.3f V' % (val)
-        else: mean_string = 'Mean: ***'
+            mean_string = 'MEAN: %.3f V' % (val)
+        else: mean_string = 'MEAN: ***'
         self.meanStr = mean_string
     def _periStr(self, val):
         if val >= 1:
@@ -101,8 +108,8 @@ class Measurement(object):
                     period_val = val * 10e8
                     period_suf = "nS"
         if val != mNAN:
-            period_string = 'Period: %.3f' % (period_val) + ' ' + period_suf
-        else: period_string = 'Period: ****'
+            period_string = 'PERI: %.3f' % (period_val) + ' ' + period_suf
+        else: period_string = 'PERI: ****'
         self.periStr = period_string
     def _freqStr(self,val):
         if val < 1e3:
@@ -115,8 +122,8 @@ class Measurement(object):
             freq_val = val / 10e5
             freq_suf = "MHz"
         if val != mNAN:
-            freq_string = 'Freq: %.3f' % (freq_val) + ' ' + freq_suf
-        else: freq_string = 'Freq: ***'
+            freq_string = 'FREQ: %.3f' % (freq_val) + ' ' + freq_suf
+        else: freq_string = 'FREQ: ***'
         self.freqStr = freq_string
     def _risStr(self,val):
         if val != mNAN:
@@ -176,9 +183,9 @@ class Channel(object):
         voltsdiv=self._instr.query_float('%3s:scale?'%self._channel)
         
         if voltsdiv >= 1:
-            volt_string = '%i V / div' % (voltsdiv)
+            volt_string = '%i\nV/DIV' % (voltsdiv)
         else:
-            volt_string = '%i mv / div' % (voltsdiv * 1000)
+            volt_string = '%i\nmV/DIV' % (voltsdiv * 1000)
         self.voltStr = volt_string
         self.voltsdiv = voltsdiv
 
@@ -343,11 +350,59 @@ class TDS2024(Serial):
                     sweep_val = tmp * 10e8
                     sweep_suf = "nS"
         sweep_val = '%.f' % sweep_val
-        self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
+        self.sweepStr = sweep_val + '\n' + (sweep_suf) + "/DIV"
+
+    def showFileSystem(self):
+        print self.query('FILES:DIR?')
 
     colorD = {1:'yellow', 2: 'aqua', 3: 'purple', 4: 'darkgreen'} # approx channel colors
-            
-    def plotChannel(self, chN, scopeView=False):
+
+    def plotAll(self):
+        figure('All CH')
+        measD={}
+        for chN in range(1,5):
+            if not self.channelWasAcq(chN):
+                continue
+
+            self.plotChannel(chN, scopeView=True, combined=True, showMeas=False)
+            chan = self.getChannel(chN)
+            measD['CH%1d: '%chN] = chan.getMeasStrL(  )
+
+    def displayMeasurements(self, chN, scopeView=True):
+        # take a single channel's worth and split in old way, or add columns at bottom per channel
+        # should accept all channel's data and sort this out
+
+        chan = self.getChannel(chN)        
+        mstr = chan.getMeasStrL().values()
+
+        if scopeView:
+            # the limits are always 0 to 10 and -4 to 4 for this scope (make class vars for it then!
+            posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
+                    (0.03*10,-3.9),
+                    (0.72*10,-3.4),
+                    (0.72*10,-3.9)
+                    )
+            posL = ( (0.03*10,-4.3),  # can add more as needed, algorithmically if i think hard enuf!
+                    (0.03*10,-4.5),
+                    (0.72*10,-4.3),
+                    (0.72*10,-4.5)
+                    )
+        else:
+            ax = gca()
+            miny, maxy = ax.get_ylim()
+            vrange=maxy-miny
+            low=0.02
+            high=0.07
+            posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
+                    (0.03*10,miny+low*vrange) ,
+                    (0.72*10,miny+high*vrange),
+                    (0.72*10,miny+low*vrange)
+                    )
+
+        for m, pos in zip(mstr, posL):
+            text( pos[0], pos[1], m , color=self.colorD[chN], backgroundcolor='silver', size='x-small')
+
+    def plotChannel(self, chN, scopeView=False, combined=False, showMeas=True):
         # plain ole plot, single channel
         # have to figure out how to generically combine channels and measurements
         if not self.channelWasAcq(chN):
@@ -355,7 +410,7 @@ class TDS2024(Serial):
             return 
         base=0
         if scopeView: base=4
-        figure(base+chN)
+        if not combined: figure(base+chN)
         chan = self.getChannel(chN)
         
         points=chan.points
@@ -363,7 +418,6 @@ class TDS2024(Serial):
         trace =  chan.trace_undisplaced if scopeView else  chan.trace
         plot(x,trace, color=self.colorD[chN])
 
-        mstr = chan.getMeasStrL().values()
         xlabel(self.sweepStr)
         theaxes = gca()
         theaxes.set_xticklabels([])
@@ -373,11 +427,7 @@ class TDS2024(Serial):
             axis([0,10,-4,4])
             ylabel(chan.voltStr)
             theaxes.set_yticklabels([])
-            posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
-                    (0.03*10,-3.9),
-                    (0.72*10,-3.4),
-                    (0.72*10,-3.9)
-                    )
+            if showMeas: self.displayMeasurements(chN)
         else:
             miny=trace.min()
             maxy=trace.max()
@@ -387,24 +437,25 @@ class TDS2024(Serial):
             vrange=maxy-miny
             axis([0,10,miny, maxy])
             ylabel(chan.wfmD['YUNIT'])
-            low=0.02
-            high=0.07
-            posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
-                    (0.03*10,miny+low*vrange) ,
-                    (0.72*10,miny+high*vrange),
-                    (0.72*10,miny+low*vrange)
-                    )
-
+            if showMeas: self.displayMeasurements(chN, scopeView=False  )
+                                     
         grid(1)
-        for m, pos in zip(mstr, posL):
-            text( pos[0], pos[1], m )
 
-        show()
-        
 if __name__ == '__main__':
     tds2024 = TDS2024(debug=True)
-    acqD =  {3:('PK2', 'PERI', 'FALL', 'RIS'), 2: ('FALL', 'RIS'), 1: ('FALL', 'RIS') }
-    tds2024.acquire(acqD )
-    tds2024.plotChannel(3)
-    tds2024.plotChannel(2, scopeView=True)
-    tds2024.plotChannel(1, scopeView=True)    
+
+    if 1:
+        acqD =  {3:('FALL', 'RIS', 'PK2', 'MAXI'), 2: ('FALL', 'RIS', 'MAXI'), 1: ('FALL', 'RIS', 'MAXI') }
+        tds2024.acquire(acqD )
+        tds2024.plotChannel(3)
+        tds2024.plotChannel(2, scopeView=True)
+        tds2024.plotChannel(1, scopeView=True)    
+        tds2024.plotAll()   
+        show()
+    if 0:  # options please!!!!
+        tds2024.showFileSystem()
+    if 0:
+        acqD =  {3:('PK2', 'PERI', 'FALL', 'RIS'), 2: ('FALL', 'RIS'), 1: ('FALL', 'RIS') }
+        tds2024.acquire(acqD )
+        tds2024.plotAll()           
+        show()
