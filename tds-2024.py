@@ -341,69 +341,52 @@ class TDS2024(Serial):
         sweep_val = '%.f' % sweep_val
         self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
             
-    def plotChannelReticule(self, chN):
-        # was the original idea of predecessor, i need to think through how to do it generically.
-        # the idea would be to make the plot look like the scope window. wooopie!!!
-        figure(4+chN)
-        chan = self.getChannel(chN)        
-        points=chan.points
-        x = 10.0*arange(points)/points
-        plot(x,chan.trace_undisplaced)  # need to go back to the earlier form of the trace, see tds2012.py
-        axis([0,10,-4,4])
-        xlabel(self.sweepStr)
-        ylabel(chan.voltStr)
-        xticks( arange(0,10,1) )
-        theaxes = gca()
-        theaxes.set_xticklabels([])
-        theaxes.set_yticklabels([])
-
-        grid(1)
-        mstr = chan.getMeasStrL().values()
-        posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
-                 (0.03*10,-3.9),
-                 (0.72*10,-3.4),
-                 (0.72*10,-3.9)
-                 )
-
-        for m, pos in zip(mstr, posL):
-            text( pos[0], pos[1], m )        
-
-        show()
-        
-    def plotChannel(self, chN):
+    def plotChannel(self, chN, scopeView=False):
         # plain ole plot, single channel
         # have to figure out how to generically combine channels and measurements
-        figure(chN)
+        base=0
+        if scopeView: base=4
+        figure(base+chN)
         chan = self.getChannel(chN)
         
         points=chan.points
         x = 10.0*arange(points)/points
-        trace=chan.trace
+        trace =  chan.trace_undisplaced if scopeView else  chan.trace
         plot(x,trace)
-        miny=trace.min()
-        maxy=trace.max()
-        vrange=maxy-miny
-        miny=miny-0.1*vrange
-        maxy=maxy+0.1*vrange
-        vrange=maxy-miny
-        axis([0,10,miny, maxy])
-        xlabel(self.sweepStr)
-        ylabel(chan.wfmD['YUNIT'])
-        xticks( arange(0,10,1) )
-        theaxes=gca()
-        theaxes.set_xticklabels([])
-        grid(1)
 
-        # need some way to generically grab the measurements requested earlier
         mstr = chan.getMeasStrL().values()
-        low=0.02
-        high=0.07
-        posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
-                 (0.03*10,miny+low*vrange) ,
-                 (0.72*10,miny+high*vrange),
-                 (0.72*10,miny+low*vrange)
-                 )
+        xlabel(self.sweepStr)
+        theaxes = gca()
+        theaxes.set_xticklabels([])
+        xticks( arange(0,10,1) )
+        
+        if scopeView:
+            axis([0,10,-4,4])
+            ylabel(chan.voltStr)
+            theaxes.set_yticklabels([])
+            posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
+                    (0.03*10,-3.9),
+                    (0.72*10,-3.4),
+                    (0.72*10,-3.9)
+                    )
+        else:
+            miny=trace.min()
+            maxy=trace.max()
+            vrange=maxy-miny
+            miny=miny-0.1*vrange
+            maxy=maxy+0.1*vrange
+            vrange=maxy-miny
+            axis([0,10,miny, maxy])
+            ylabel(chan.wfmD['YUNIT'])
+            low=0.02
+            high=0.07
+            posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
+                    (0.03*10,miny+low*vrange) ,
+                    (0.72*10,miny+high*vrange),
+                    (0.72*10,miny+low*vrange)
+                    )
 
+        grid(1)
         for m, pos in zip(mstr, posL):
             text( pos[0], pos[1], m )
 
@@ -414,4 +397,4 @@ if __name__ == '__main__':
     acqL =  ( (3,('PK2', 'PERI', 'FALL', 'RIS')), )
     tds2024.acquire(acqL )
     tds2024.plotChannel(3)
-    tds2024.plotChannelReticule(3)
+    tds2024.plotChannel(3, scopeView=True)
