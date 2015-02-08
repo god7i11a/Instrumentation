@@ -253,6 +253,7 @@ class TDS2024(Serial):
     """
     _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
     _channelL=[]
+    _channelAcqL=[]
     
     def __init__(self, port="/dev/ttyS0", debug=False):
         self._port = port
@@ -277,6 +278,8 @@ class TDS2024(Serial):
 
     def getChannel(self, chN):
         return self._channelL[chN-1]
+    def channelWasAcq(self, chN):
+        return chN in self._chanAcqL
     
     def query(self, req, nBytes=None):
         if self._debug:
@@ -312,10 +315,11 @@ class TDS2024(Serial):
 
     __del__ = complete
 
-    def acquire(self, chmL, prepChannels=True):
+    def acquire(self, chmD, prepChannels=True):
         self.prepare()
         self.getSweepSetting()
-        for ch,m in chmL:
+        self._chanAcqL=chmD.keys()
+        for ch,m in chmD.items():
             chan = self.getChannel(ch)
             chan.getVerticalSetting()
             chan.acqMeas(m)
@@ -340,10 +344,15 @@ class TDS2024(Serial):
                     sweep_suf = "nS"
         sweep_val = '%.f' % sweep_val
         self.sweepStr = sweep_val + ' ' + (sweep_suf) + " / div"
+
+    colorD = {1:'yellow', 2: 'aqua', 3: 'purple', 4: 'darkgreen'} # approx channel colors
             
     def plotChannel(self, chN, scopeView=False):
         # plain ole plot, single channel
         # have to figure out how to generically combine channels and measurements
+        if not self.channelWasAcq(chN):
+            print '%s was not acquired, skipping'%chN
+            return 
         base=0
         if scopeView: base=4
         figure(base+chN)
@@ -352,7 +361,7 @@ class TDS2024(Serial):
         points=chan.points
         x = 10.0*arange(points)/points
         trace =  chan.trace_undisplaced if scopeView else  chan.trace
-        plot(x,trace)
+        plot(x,trace, color=self.colorD[chN])
 
         mstr = chan.getMeasStrL().values()
         xlabel(self.sweepStr)
@@ -394,7 +403,8 @@ class TDS2024(Serial):
         
 if __name__ == '__main__':
     tds2024 = TDS2024(debug=True)
-    acqL =  ( (3,('PK2', 'PERI', 'FALL', 'RIS')), )
-    tds2024.acquire(acqL )
+    acqD =  {3:('PK2', 'PERI', 'FALL', 'RIS'), 2: ('FALL', 'RIS'), 1: ('FALL', 'RIS') }
+    tds2024.acquire(acqD )
     tds2024.plotChannel(3)
-    tds2024.plotChannel(3, scopeView=True)
+    tds2024.plotChannel(2, scopeView=True)
+    tds2024.plotChannel(1, scopeView=True)    
