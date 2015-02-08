@@ -19,8 +19,8 @@
 
 
 
-from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure
-from numpy import array
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks
+from numpy import array, arange
 from string import split, upper
 from time import sleep
 from struct import unpack
@@ -135,6 +135,9 @@ class Measurement(object):
                 setattr(self, typ.lower()+'_Str', '********')            
         self.isReset=True
 
+def _strip(strBuf):
+    return strBuf.replace('"', '')
+
 class Channel(object):
     wfmD = {}
     wfmFuncD = {'BYT_NR':int,
@@ -143,16 +146,16 @@ class Channel(object):
                 'BN_FMT': None,
                 'BYT_OR': None,
                 'NR_PT': int,
-                'WFID': None, # "Ch3, DC coupling, 1.0E0 V/div, 1.0E-1 s/div, 2500 points, Sample mode"
+                'WFID': _strip, # "Ch3, DC coupling, 1.0E0 V/div, 1.0E-1 s/div, 2500 points, Sample mode"
                 'PT_FMT': None,
                 'XINCR': float, # 4.0E-4
                 'PT_OFF': int, # 0
                 'XZERO': float, # -1.0E-1
-                'XUNIT': None, # "s"
+                'XUNIT': _strip, # "s"
                 'YMULT': float, # 4.0E-2
                 'YZERO': float, # 0.0E0
                 'YOFF': float, # -4.5E1
-                'YUNIT': None #"Volts"
+                'YUNIT': _strip #"Volts"
             }
     wfmT = wfmFuncD.keys()
 
@@ -193,7 +196,7 @@ class Channel(object):
         return self._msmnt.getMeasStrL()
 
     def wfmpreQ(self):
-        tmp=self._instr.query('wfmpre?')
+        tmp=self._instr.query('wfmpre?')[0:-1] # strip CR
         # strip header :WFMPRE:
         preamble = split(tmp[8:],';')
         for resp in preamble:
@@ -236,7 +239,7 @@ class Channel(object):
         points = self.wfmD['NR_PT']
         tmp = array( map(int, tmplist) )
         self.trace =  (tmp - yoff) * ymult + yzero
-        self.trace_undisplaced = 2*tmp*ymult    # uhhh, why 2*   ????????
+        self.trace_undisplaced = tmp*ymult/self.voltsdiv
             
         if self._instr._debug: print self.trace
 
@@ -344,24 +347,22 @@ class TDS2024(Serial):
         figure(4+chN)
         chan = self.getChannel(chN)        
         points=chan.points
-
-        plot(chan.trace_undisplaced)  # need to go back to the earlier form of the trace, see tds2012.py
-        axis([0,points,-4,4])
+        x = 10.0*arange(points)/points
+        plot(x,chan.trace_undisplaced)  # need to go back to the earlier form of the trace, see tds2012.py
+        axis([0,10,-4,4])
         xlabel(self.sweepStr)
         ylabel(chan.voltStr)
+        xticks( arange(0,10,1) )
         theaxes = gca()
         theaxes.set_xticklabels([])
-        if not theaxes.is_first_col():
-            theaxes.set_yticklabels([])
-        if not theaxes.is_last_row():
-            theaxes.set_xticklabels([])
-        grid(1)
+        theaxes.set_yticklabels([])
 
+        grid(1)
         mstr = chan.getMeasStrL().values()
-        posL = ( (0.03*points,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
-                 (0.03*points,-3.9),
-                 (0.72*points,-3.4),
-                 (0.72*points,-3.9)
+        posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
+                 (0.03*10,-3.9),
+                 (0.72*10,-3.4),
+                 (0.72*10,-3.9)
                  )
 
         for m, pos in zip(mstr, posL):
@@ -376,33 +377,31 @@ class TDS2024(Serial):
         chan = self.getChannel(chN)
         
         points=chan.points
+        x = 10.0*arange(points)/points
         trace=chan.trace
-        plot(trace)
+        plot(x,trace)
         miny=trace.min()
         maxy=trace.max()
         vrange=maxy-miny
         miny=miny-0.1*vrange
         maxy=maxy+0.1*vrange
         vrange=maxy-miny
-        axis([0,points,miny, maxy])
+        axis([0,10,miny, maxy])
         xlabel(self.sweepStr)
-        ylabel(chan.voltStr)
-        theaxes = gca()
+        ylabel(chan.wfmD['YUNIT'])
+        xticks( arange(0,10,1) )
+        theaxes=gca()
         theaxes.set_xticklabels([])
-        if not theaxes.is_first_col():
-            theaxes.set_yticklabels([])
-        if not theaxes.is_last_row():
-            theaxes.set_xticklabels([])
         grid(1)
 
         # need some way to generically grab the measurements requested earlier
         mstr = chan.getMeasStrL().values()
         low=0.02
         high=0.07
-        posL = ( (0.03*points,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
-                 (0.03*points,miny+low*vrange) ,
-                 (0.72*points,miny+high*vrange),
-                 (0.72*points,miny+low*vrange)
+        posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
+                 (0.03*10,miny+low*vrange) ,
+                 (0.72*10,miny+high*vrange),
+                 (0.72*10,miny+low*vrange)
                  )
 
         for m, pos in zip(mstr, posL):
