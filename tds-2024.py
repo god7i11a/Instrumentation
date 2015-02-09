@@ -50,9 +50,9 @@ class Measurement(object):
         self.reset()
         self.measL=()
 
-    def getMeasStrL(self):
+    def getMeasStrLD(self):
         return {m: getattr(self, m.lower()+'Str') for m in self.measL}        
-    def getMeasL(self):
+    def getMeasStrLL(self):
         return [getattr(self, m.lower()+'Str') for m in self.measL]
 
     def __call__(self, keyL):
@@ -127,11 +127,11 @@ class Measurement(object):
         self.freqStr = freq_string
     def _risStr(self,val):
         if val != mNAN:
-            self.risStr = 'RISe: %f s'%val
+            self.risStr = 'RISe: %.3f s'%val
         else: self.risStr = 'RISe: ***'
     def _fallStr(self,val):
         if val != mNAN:
-            self.fallStr = 'FALL: %f s'%val
+            self.fallStr = 'FALL: %.3f s'%val
         else: self.fallStr = 'FALL: ***'
 
     def reset(self):
@@ -197,10 +197,10 @@ class Channel(object):
         # acquire some measurements, available later as self.getMeasurements()
         self._msmnt(mL)
 
-    def getMeasL(self):
-        return self._msmnt.getMeasL()
+    def getMeasStrD(self):
+        return self._msmnt.getMeasStrLD()
     def getMeasStrL(self):
-        return self._msmnt.getMeasStrL()
+        return self._msmnt.getMeasStrLL()
 
     def wfmpreQ(self):
         tmp=self._instr.query('wfmpre?')[0:-1] # strip CR
@@ -358,24 +358,15 @@ class TDS2024(Serial):
     colorD = {1:'yellow', 2: 'aqua', 3: 'purple', 4: 'darkgreen'} # approx channel colors
 
     def plotAll(self):
-        figure('All CH')
+        figure('CH: ALL')
         measD={}
-        for chN in range(1,5):
-            if not self.channelWasAcq(chN):
-                continue
+        chNL = [ ch for ch in range(1,5)  if self.channelWasAcq(ch) ]
+        for chN in chNL:
+            self.plotChannel(chN, scopeView=True, newfig=False, showMeas=False)
+        self.displayMeasurements(chNL)
 
-            self.plotChannel(chN, scopeView=True, combined=True, showMeas=False)
-            chan = self.getChannel(chN)
-            measD['CH%1d: '%chN] = chan.getMeasStrL(  )
-
-    def displayMeasurements(self, chN, scopeView=True):
-        # take a single channel's worth and split in old way, or add columns at bottom per channel
-        # should accept all channel's data and sort this out
-
-        chan = self.getChannel(chN)        
-        mstr = chan.getMeasStrL().values()
-
-        if scopeView:
+    def displayMeasurements(self, chNL ):
+        """
             # the limits are always 0 to 10 and -4 to 4 for this scope (make class vars for it then!
             posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
                     (0.03*10,-3.9),
@@ -387,30 +378,61 @@ class TDS2024(Serial):
                     (0.72*10,-4.3),
                     (0.72*10,-4.5)
                     )
-        else:
-            ax = gca()
-            miny, maxy = ax.get_ylim()
-            vrange=maxy-miny
-            low=0.02
-            high=0.07
             posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
                     (0.03*10,miny+low*vrange) ,
                     (0.72*10,miny+high*vrange),
                     (0.72*10,miny+low*vrange)
                     )
+        """
+        def positioner(chN, i):
+            if solo:
+                if i<2:
+                    x = 0.1*hrange+hdelta
+                    y=vbase-i*vdelta
+                else:
+                    x =  0.8*hrange + hdelta
+                    y=vbase-(i-2)*vdelta
+            else:
+                y = vbase-i*vdelta
+                if chN<3:
+                    x = (chN-1)*2*hrange/10+3*hdelta
+                else:
+                    x = (chN)*2*hrange/10+3*hdelta
+            return x,y
 
-        for m, pos in zip(mstr, posL):
-            text( pos[0], pos[1], m , color=self.colorD[chN], backgroundcolor='silver', size='x-small')
+        solo = len(chNL)==1
+        
+        ax = gca()
+        miny, maxy = ax.get_ylim()
+        minx, maxx = ax.get_xlim()
+        vrange=maxy-miny
+        hrange=maxx-minx
+        hdelta = 3*hrange/1000
+        vdelta = 0.2* (vrange / 8)
+        
+        if solo:
+            vbase=miny+.09*vrange
+        else:
+            vbase=miny-2.5*vrange/100  # should be a little lower
 
-    def plotChannel(self, chN, scopeView=False, combined=False, showMeas=True):
+        for chN in chNL:
+            chan = self.getChannel(chN)        
+            mstr = chan.getMeasStrL()
+
+            i=0
+            for m in mstr:
+                x,y= positioner(chN, i)
+                text( x, y, m , color=self.colorD[chN], backgroundcolor='silver', size='x-small')  # use fixed width font???
+                i=i+1
+
+    def plotChannel(self, chN, scopeView=False, newfig=True, showMeas=True):
         # plain ole plot, single channel
         # have to figure out how to generically combine channels and measurements
         if not self.channelWasAcq(chN):
             print '%s was not acquired, skipping'%chN
             return 
-        base=0
-        if scopeView: base=4
-        if not combined: figure(base+chN)
+
+        if newfig: figure('CH%1d'%chN)
         chan = self.getChannel(chN)
         
         points=chan.points
@@ -427,7 +449,6 @@ class TDS2024(Serial):
             axis([0,10,-4,4])
             ylabel(chan.voltStr)
             theaxes.set_yticklabels([])
-            if showMeas: self.displayMeasurements(chN)
         else:
             miny=trace.min()
             maxy=trace.max()
@@ -437,10 +458,11 @@ class TDS2024(Serial):
             vrange=maxy-miny
             axis([0,10,miny, maxy])
             ylabel(chan.wfmD['YUNIT'])
-            if showMeas: self.displayMeasurements(chN, scopeView=False  )
-                                     
+
         grid(1)
 
+        if showMeas: self.displayMeasurements((chN,) )
+                                     
 if __name__ == '__main__':
     tds2024 = TDS2024(debug=True)
 
