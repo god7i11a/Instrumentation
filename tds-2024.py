@@ -20,23 +20,29 @@
 # see also: https://github.com/python-ivi
 
 
+import datetime
+from matplotlib import rc, use
+use('WXAGG')
+rc('text', usetex=True)
+rc('font', family='monospace')  # LOOKs like a scope  ;-)
 
-from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title
 from numpy import array, arange
+from math import log10, ceil
 from string import split, upper
 from time import sleep
 from struct import unpack
-from serial import Serial   # we don't need no steenkin' VISA 
+from serial import Serial   # we don't need no steenkin' VISA
 
 # how long to sleep after issuing a write
 sleeptime = 0.01
 
-mNAN = 9.9e+37  # Tektronic "not a number"
+mNAN = 9.9e+37  # Tektronix "not a number"
 
 class Measurement(object):
     """
-     Given a list of measurement requests on a channel, and a function for obtaining them, acquire the measurements when call()ed and 
-     set appropriate attributes to store these values. Also store appropriate stringified versions, for later display.
+    Given a list of measurement requests on a channel, and a function for obtaining them, acquire the measurements when call()ed and 
+    set appropriate attributes to store these values. Also store appropriate stringified versions, for later display.
 
     Acquired measurements can be retrieved by attribute, or can be returned as a list or a dictionary.
 
@@ -45,15 +51,18 @@ class Measurement(object):
 
     TODO:
     1. do we want immediate measurements or regular?
-    2. get the associated unit, for display
+    2. get the associated unit, for display (why bother, here they are:)
     """
-    mtypeT = ('FREQ', 'MEAN', 'PERI', 'PHA', 'PK2', 'CRM', 'MINI', 'MAXI', 'RIS', 'FALL', 'PWI', 'NWI')
-    isReset=False
+    mtypeT = ('FREQ', 'MEAN', 'PERI', 'PHAS', 'PK2P', 'CRMS', 'MINI', 'MAXI', 'RISE', 'FALL', 'PWID', 'NWID')
+    munitsT = ('Hz',   'V ',    's ',    '',   'V ',   'V ',    'V ',   'V ',   's ',  's ',    's ',  's ')
+    mtypeD = {meas: unit for meas, unit in zip(mtypeT, munitsT)}
+    sufD = {0:' ', 3:'m', 6:'u', 9:'n', 12:'p', -3: 'k', -6:'M'}
     
     def __init__(self, mreader):
         self._immed=mreader
-        self.reset()
+        self.isReset=False
         self.measL=()
+        self.reset()
 
     def getMeasStrLD(self):
         return {m: getattr(self, m.lower()+'Str') for m in self.measL}        
@@ -70,77 +79,39 @@ class Measurement(object):
                 raise ValueError('Channel does not support %s IMMed TYPe'%key)
         
             val = self._immed(key)
-            # dropcase
-            key = key.lower()
-            # store raw as attr
-            setattr(self, key, val)
             
             # we make nice strings for later retrieval
             # means data is acquired throu call() and retrived via attribute
-            attrN = '_'+key+'Str'
-            func = getattr(self, attrN)
-            func(val)
+            attrN = key.lower()+'Str'
+            setattr(self, attrN, self.val_to_string(val, key))
+
+            # store raw as attr
+            setattr(self, key.lower(), val)
+            
         self.isReset=False # we have readings
 
-    # these convenience funcs could really be classified according to the UNIT of the measurement.
-    # so Volts, seconds, and Hz. 
-    def _pk2Str(self, val):
-        if val != mNAN:
-            peak_string = 'PK2p: %.3f V' % (val)
-        else: peak_string = 'PK2p: ***'
-        self.pk2Str = peak_string
-    def _maxiStr(self, val):
-        if val != mNAN:
-            maxi_string = 'MAXI: %.3f V' % (val)
-        else: maxi_string = 'MAXI: ***'
-        self.maxiStr = maxi_string
-    def _meanStr(self, val):
-        if val != mNAN:
-            mean_string = 'MEAN: %.3f V' % (val)
-        else: mean_string = 'MEAN: ***'
-        self.meanStr = mean_string
-    def _periStr(self, val):
-        if val >= 1:
-            period_val = val
-            period_suf = "S"
-        if val < 1:
-            period_val = val * 10e2
-            period_suf = "mS"
-            if val < 0.001:
-                sweep_val = val * 10e5
-                sweep_suf = "uS"
-                if val < 0.000001:
-                    period_val = val * 10e8
-                    period_suf = "nS"
-        if val != mNAN:
-            period_string = 'PERI: %.3f' % (period_val) + ' ' + period_suf
-        else: period_string = 'PERI: ****'
-        self.periStr = period_string
-    def _freqStr(self,val):
-        if val < 1e3:
-            freq_val = val
-            freq_suf = "Hz"
-        if val < 1e6:
-            freq_val = val / 10e2
-            freq_suf = "kHz"
-        if val >= 1e6:
-            freq_val = val / 10e5
-            freq_suf = "MHz"
-        if val != mNAN:
-            freq_string = 'FREQ: %.3f' % (freq_val) + ' ' + freq_suf
-        else: freq_string = 'FREQ: ***'
-        self.freqStr = freq_string
-    def _risStr(self,val):
-        if val != mNAN:
-            self.risStr = 'RISe: %.3f s'%val
-        else: self.risStr = 'RISe: ***'
-    def _fallStr(self,val):
-        if val != mNAN:
-            self.fallStr = 'FALL: %.3f s'%val
-        else: self.fallStr = 'FALL: ***'
+    def val_to_string(self, val, meas):
+        tmpl = '%4s: %07.3f '
+        if val == 0.0: 
+            return tmpl%(meas, val) + ' ' + self.mtypeD[meas]
+        sgn = val/abs(val)
+        val=abs(val)
+
+        if val > 10.0e9: return '%4s: ******'%meas
+
+        if val<1.0 or val>=1000.:
+            mul = ceil(log10(1.0/val))
+            mulmod =3* (int( ceil(mul/3) ) )
+            scaled = sgn*val*10**mulmod
+            suf = self.sufD[mulmod]
+        else:
+            scaled = sgn*val
+            suf=' '
+            
+        return tmpl%(meas,scaled) + suf + self.mtypeD[meas]
 
     def reset(self):
-    # clear the previous readings.
+        # clear the previous readings.
         if not self.isReset:
             # reset all values
             for typ in self.mtypeT:
@@ -152,7 +123,6 @@ def _strip(strBuf):
     return strBuf.replace('"', '')
 
 class Channel(object):
-    wfmD = {}
     wfmFuncD = {'BYT_NR':int,
                 'BIT_NR': int,
                 'ENCDG': None,  # ASC | BIN
@@ -183,6 +153,7 @@ class Channel(object):
         self._channel = 'CH%1d'%chN
         self._instr = instr
         self._msmnt = Measurement(self.getImmed)
+        self.wfmD = {}
 
     def getVerticalSetting(self):
         # get instrument settings
@@ -265,8 +236,6 @@ class TDS2024(Serial):
     4. could autostore data (tables best for this)
     """
     _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
-    _channelL=[]
-    _channelAcqL=[]
     
     def __init__(self, port="/dev/ttyS0", debug=False):
         self._port = port
@@ -286,6 +255,8 @@ class TDS2024(Serial):
         else:
             raise ValueError('Failed to get instrument id (%s)'%resp)
 
+        self._channelL=[]
+        self._channelAcqL=[]
         for i in (1,2,3,4):
             self._channelL.append( Channel(i,self) )
 
@@ -293,6 +264,8 @@ class TDS2024(Serial):
         return self._channelL[chN-1]
     def channelWasAcq(self, chN):
         return chN in self._chanAcqL
+    def getacqTag(self):
+        return self._acqtag
     
     def query(self, req, nBytes=None):
         if self._debug:
@@ -328,16 +301,24 @@ class TDS2024(Serial):
 
     __del__ = complete
 
-    def acquire(self, chmD, prepChannels=True):
+    def acquire(self, chmD, tag=None, prepChannels=True):
         self.prepare()
         self.getSweepSetting()
         self._chanAcqL=chmD.keys()
+        self._acqtag=tag
         for ch,m in chmD.items():
             chan = self.getChannel(ch)
             chan.getVerticalSetting()
             chan.acqMeas(m)
             chan.acquire(prepChannels)
         self.complete()
+
+    def load(self):
+        pass
+
+    def dump(self):
+        dfp = open('scope.dat', 'w')
+        dfp.close()
         
     def getSweepSetting(self):
         tmp=self.query_float('hor:mai:sca?')
@@ -361,35 +342,25 @@ class TDS2024(Serial):
     def showFileSystem(self):
         print self.query('FILES:DIR?')
 
+class TestScope(TDS2024):
+    def acquire(self, chmD, prepChannels=True):
+        pass
+
+class ScopeDisplay(object):
     colorD = {1:'yellow', 2: 'aqua', 3: 'purple', 4: 'darkgreen'} # approx channel colors
 
+    def __init__(self, instr):
+        self.instr=instr
+
     def plotAll(self):
-        figure('CH: ALL')
+        figure('CHALL')
         measD={}
-        chNL = [ ch for ch in range(1,5)  if self.channelWasAcq(ch) ]
+        chNL = [ ch for ch in range(1,5)  if self.instr.channelWasAcq(ch) ]
         for chN in chNL:
             self.plotChannel(chN, scopeView=True, newfig=False, showMeas=False)
-        self.displayMeasurements(chNL)
+        self.displayMeasurements(chNL, addIDatTop=True)
 
-    def displayMeasurements(self, chNL ):
-        """
-            # the limits are always 0 to 10 and -4 to 4 for this scope (make class vars for it then!
-            posL = ( (0.03*10,-3.4),  # can add more as needed, algorithmically if i think hard enuf!
-                    (0.03*10,-3.9),
-                    (0.72*10,-3.4),
-                    (0.72*10,-3.9)
-                    )
-            posL = ( (0.03*10,-4.3),  # can add more as needed, algorithmically if i think hard enuf!
-                    (0.03*10,-4.5),
-                    (0.72*10,-4.3),
-                    (0.72*10,-4.5)
-                    )
-            posL = ( (0.03*10,miny+high*vrange),  # can add more as needed, algorithmically if i think hard enuf!
-                    (0.03*10,miny+low*vrange) ,
-                    (0.72*10,miny+high*vrange),
-                    (0.72*10,miny+low*vrange)
-                    )
-        """
+    def displayMeasurements(self, chNL, addIDatTop=False):
         def positioner(chN, i):
             if solo:
                 if i<2:
@@ -414,17 +385,23 @@ class TDS2024(Serial):
         vrange=maxy-miny
         hrange=maxx-minx
         hdelta = 3*hrange/1000
-        vdelta = 0.2* (vrange / 8)
+        vdelta = 0.22* (vrange / 8)
         
         if solo:
             vbase=miny+.09*vrange
         else:
-            vbase=miny-2.5*vrange/100  # should be a little lower
+            vbase=miny-2.7*vrange/100  # should be a little lower
 
+        notAdded=True
         for chN in chNL:
-            chan = self.getChannel(chN)        
+            chan = self.instr.getChannel(chN)        
             mstr = chan.getMeasStrL()
 
+            if addIDatTop and notAdded:
+                tag = chan.wfmD['WFID'].replace('%1d'%chN, '*', 1)
+                title(tag, size='small')
+                notAdded=False
+                
             i=0
             for m in mstr:
                 x,y= positioner(chN, i)
@@ -434,19 +411,22 @@ class TDS2024(Serial):
     def plotChannel(self, chN, scopeView=False, newfig=True, showMeas=True):
         # plain ole plot, single channel
         # have to figure out how to generically combine channels and measurements
-        if not self.channelWasAcq(chN):
+        if not self.instr.channelWasAcq(chN):
             print '%s was not acquired, skipping'%chN
             return 
 
-        if newfig: figure('CH%1d'%chN)
-        chan = self.getChannel(chN)
+        chan = self.instr.getChannel(chN)
+
+        if newfig:
+            figure('CH%1d'%chN)
+            title(chan.wfmD['WFID'], size='small')
         
         points=chan.points
         x = 10.0*arange(points)/points
         trace =  chan.trace_undisplaced if scopeView else  chan.trace
         plot(x,trace, color=self.colorD[chN])
 
-        xlabel(self.sweepStr)
+        xlabel(self.instr.sweepStr)
         theaxes = gca()
         theaxes.set_xticklabels([])
         xticks( arange(0,10,1) )
@@ -470,20 +450,30 @@ class TDS2024(Serial):
         if showMeas: self.displayMeasurements((chN,) )
                                      
 if __name__ == '__main__':
+    TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
     tds2024 = TDS2024(debug=True)
 
-    if 1:
-        acqD =  {3:('FALL', 'RIS', 'PK2', 'MAXI'), 2: ('FALL', 'RIS', 'MAXI'), 1: ('FALL', 'RIS', 'MAXI') }
+    if 0:
+        from pickle import dump, load
+        # can't pickle the instance. have to try grabbing only attributed ....
+        acqD =  {3:('FALL', 'RISE', 'PK2P', 'MAXI'), 2: ('FALL', 'RISE', 'MAXI'), 1: ('FALL', 'RISE', 'MAXI') }
         tds2024.acquire(acqD )
-        tds2024.plotChannel(3)
-        tds2024.plotChannel(2, scopeView=True)
-        tds2024.plotChannel(1, scopeView=True)    
-        tds2024.plotAll()   
+        tds2024.dump()
+
+    if 1:
+        mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
+        acqD =  {3:mT, 2: mT, 1: mT}
+        tds2024.acquire(acqD, tag='approach up to string' )
+        pl=ScopeDisplay(tds2024)
+        pl.plotChannel(3)
+        pl.plotChannel(2, scopeView=False)
+        pl.plotChannel(1, scopeView=False)    
+        pl.plotAll()   
         show()
     if 0:  # options please!!!!
         tds2024.showFileSystem()
     if 0:
-        acqD =  {3:('PK2', 'PERI', 'FALL', 'RIS'), 2: ('FALL', 'RIS'), 1: ('FALL', 'RIS') }
+        acqD =  {3:('PK2P', 'PERI', 'FALL', 'RISE'), 2: ('FALL', 'RISE'), 1: ('FALL', 'RISE') }
         tds2024.acquire(acqD )
         tds2024.plotAll()           
         show()
