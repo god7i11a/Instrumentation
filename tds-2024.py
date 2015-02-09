@@ -35,12 +35,17 @@ mNAN = 9.9e+37  # Tektronic "not a number"
 
 class Measurement(object):
     """
+     Given a list of measurement requests on a channel, and a function for obtaining them, acquire the measurements when call()ed and 
+     set appropriate attributes to store these values. Also store appropriate stringified versions, for later display.
+
+    Acquired measurements can be retrieved by attribute, or can be returned as a list or a dictionary.
+
+    possible measurements:
+    MEASUrement:IMMed:TYPe { FREQuency | MEAN | PERIod |PHAse | PK2pk | CRMs | MINImum | MAXImum | RISe | FALL | PWIdth | NWIdth }
+
     TODO:
     1. do we want immediate measurements or regular?
     2. get the associated unit, for display
-    
-    possible measurements:
-    MEASUrement:IMMed:TYPe { FREQuency | MEAN | PERIod |PHAse | PK2pk | CRMs | MINImum | MAXImum | RISe | FALL | PWIdth | NWIdth }
     """
     mtypeT = ('FREQ', 'MEAN', 'PERI', 'PHA', 'PK2', 'CRM', 'MINI', 'MAXI', 'RIS', 'FALL', 'PWI', 'NWI')
     isReset=False
@@ -135,6 +140,7 @@ class Measurement(object):
         else: self.fallStr = 'FALL: ***'
 
     def reset(self):
+    # clear the previous readings.
         if not self.isReset:
             # reset all values
             for typ in self.mtypeT:
