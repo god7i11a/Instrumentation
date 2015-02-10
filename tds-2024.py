@@ -22,9 +22,9 @@
 
 import datetime
 from matplotlib import rc, use
-use('WXAGG')
-rc('text', usetex=True)
+rc('text', usetex=False)
 rc('font', family='monospace')  # LOOKs like a scope  ;-)
+use('WXAGG')
 
 from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title
 from numpy import array, arange
@@ -91,13 +91,13 @@ class Measurement(object):
         self.isReset=False # we have readings
 
     def val_to_string(self, val, meas):
-        tmpl = '%4s: %07.3f '
+        tmpl = '{:4s}: {:> 8.3f} '
         if val == 0.0: 
-            return tmpl%(meas, val) + ' ' + self.mtypeD[meas]
+            return tmpl.format(meas, val) + ' ' + self.mtypeD[meas]
         sgn = val/abs(val)
         val=abs(val)
 
-        if val > 10.0e9: return '%4s: ******'%meas
+        if val > 10.0e9: return '%4s:  ** ? **   '%meas
 
         if val<1.0 or val>=1000.:
             mul = ceil(log10(1.0/val))
@@ -108,7 +108,7 @@ class Measurement(object):
             scaled = sgn*val
             suf=' '
             
-        return tmpl%(meas,scaled) + suf + self.mtypeD[meas]
+        return tmpl.format(meas,scaled) + suf + self.mtypeD[meas]
 
     def reset(self):
         # clear the previous readings.
@@ -294,7 +294,7 @@ class TDS2024(Serial):
 
     def prepare(self):
         self.cmd('acquire:state on')
-        raw_input('Press ENTER to trigger measurement: ')
+        raw_input('Press ENTER when ready to acquire triggered data: ')
 
     def complete(self):
         self.cmd('acquire:state off')
@@ -399,13 +399,13 @@ class ScopeDisplay(object):
 
             if addIDatTop and notAdded:
                 tag = chan.wfmD['WFID'].replace('%1d'%chN, '*', 1)
-                title(tag, size='small')
+                title(tag, size=10)
                 notAdded=False
                 
             i=0
             for m in mstr:
                 x,y= positioner(chN, i)
-                text( x, y, m , color=self.colorD[chN], backgroundcolor='silver', size='x-small')  # use fixed width font???
+                text( x, y, m , color=self.colorD[chN], backgroundcolor='silver', size=6, family= 'monospace')  # use fixed width font???
                 i=i+1
 
     def plotChannel(self, chN, scopeView=False, newfig=True, showMeas=True):
@@ -414,26 +414,26 @@ class ScopeDisplay(object):
         if not self.instr.channelWasAcq(chN):
             print '%s was not acquired, skipping'%chN
             return 
-
+        labelSz=10
         chan = self.instr.getChannel(chN)
 
         if newfig:
             figure('CH%1d'%chN)
-            title(chan.wfmD['WFID'], size='small')
+            title(chan.wfmD['WFID'], size=10)
         
         points=chan.points
         x = 10.0*arange(points)/points
         trace =  chan.trace_undisplaced if scopeView else  chan.trace
         plot(x,trace, color=self.colorD[chN])
 
-        xlabel(self.instr.sweepStr)
+        xlabel(self.instr.sweepStr, size=labelSz)
         theaxes = gca()
         theaxes.set_xticklabels([])
         xticks( arange(0,10,1) )
         
         if scopeView:
             axis([0,10,-4,4])
-            ylabel(chan.voltStr)
+            ylabel(chan.voltStr, size=labelSz)
             theaxes.set_yticklabels([])
         else:
             miny=trace.min()
@@ -443,7 +443,7 @@ class ScopeDisplay(object):
             maxy=maxy+0.1*vrange
             vrange=maxy-miny
             axis([0,10,miny, maxy])
-            ylabel(chan.wfmD['YUNIT'])
+            ylabel(chan.wfmD['YUNIT'], size=labelSz)
 
         grid(1)
 
@@ -451,7 +451,7 @@ class ScopeDisplay(object):
                                      
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
-    tds2024 = TDS2024(debug=True)
+    tds2024 = TDS2024(debug=False)
 
     if 0:
         from pickle import dump, load
