@@ -11,6 +11,7 @@
 # Current status:
 # Version 0.1 -- 6/7 Feb 2015 first version, uses serial interface, will do USB and GPIB later.
 #                starting with TDS 2024, probably useful for many others
+# Version 0.2 -- 10 Feb 2015 many improvements to code, in good working order, ready to be extended as needed. 
 #
 #
 # adapated from : http://www.febo.com/geekworks/data-capture/tds-2012.html cf. https://gist.github.com/pklaus/320584 
@@ -94,18 +95,16 @@ class Measurement(object):
         tmpl = '{:4s}: {:> 8.3f} '
         if val == 0.0: 
             return tmpl.format(meas, val) + ' ' + self.mtypeD[meas]
-        sgn = val/abs(val)
-        val=abs(val)
+        aval = abs(val)
+        
+        if aval > 10.0e9: return '%4s:  ** ? **   '%meas
 
-        if val > 10.0e9: return '%4s:  ** ? **   '%meas
-
-        if val<1.0 or val>=1000.:
-            mul = ceil(log10(1.0/val))
-            mulmod =3* (int( ceil(mul/3) ) )
-            scaled = sgn*val*10**mulmod
+        if aval<1.0 or aval>=1000.:
+            mulmod =3 * ceil( log10(1.0/aval)  / 3)
+            scaled = val*10**mulmod
             suf = self.sufD[mulmod]
         else:
-            scaled = sgn*val
+            scaled = val
             suf=' '
             
         return tmpl.format(meas,scaled) + suf + self.mtypeD[meas]
@@ -321,23 +320,17 @@ class TDS2024(Serial):
         dfp.close()
         
     def getSweepSetting(self):
-        tmp=self.query_float('hor:mai:sca?')
-        tmp = float(tmp)
-        rawsweep = tmp
-        if tmp >= 1:
-            sweep_val = tmp
-            sweep_suf = "S"
-        if tmp < 1:
-            sweep_val = tmp * 10e2
-            sweep_suf = "mS"
-            if tmp < 0.001:
-                sweep_val = tmp * 10e5
-                sweep_suf = "uS"
-                if tmp < 0.000001:
-                    sweep_val = tmp * 10e8
-                    sweep_suf = "nS"
-        sweep_val = '%.f' % sweep_val
-        self.sweepStr = sweep_val + '\n' + (sweep_suf) + "/DIV"
+        sufD = {3:'m', 6:'u', 9:'n'}
+        scaled=self.query_float('hor:mai:sca?')
+        if scaled >= 1:
+            suf = ' s'
+        if scaled < 1:
+            mulmod =3 * ceil( log10(1.0/scaled)  / 3)            
+            scaled = scaled*10**mulmod
+            suf = sufD[mulmod]+'s'
+        sweepStr= '%.f' % scaled
+        self.sweepStr = sweepStr + '\n' + (suf) + "/DIV"
+        self.sweep=scaled
 
     def showFileSystem(self):
         print self.query('FILES:DIR?')
