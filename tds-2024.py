@@ -27,7 +27,7 @@ rc('text', usetex=False)
 rc('font', family='monospace')  # LOOKs like a scope  ;-)
 use('WXAGG')
 
-from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title, ion, ioff
 from numpy import array, arange
 from math import log10, ceil
 from string import split, upper
@@ -300,11 +300,10 @@ class TDS2024(Serial):
 
     __del__ = complete
 
-    def acquire(self, chmD, tag=None, prepChannels=True):
+    def acquire(self, chmD, prepChannels=True):
         self.prepare()
         self.getSweepSetting()
         self._chanAcqL=chmD.keys()
-        self._acqtag=tag
         for ch,m in chmD.items():
             chan = self.getChannel(ch)
             chan.getVerticalSetting()
@@ -344,9 +343,12 @@ class ScopeDisplay(object):
 
     def __init__(self, instr):
         self.instr=instr
-
+        self.figL=[]
+        self.tag=None
+        
     def plotAll(self):
-        figure('CHALL')
+        f=figure('CHALL')
+        self.figL.append(f)
         measD={}
         chNL = [ ch for ch in range(1,5)  if self.instr.channelWasAcq(ch) ]
         for chN in chNL:
@@ -411,7 +413,8 @@ class ScopeDisplay(object):
         chan = self.instr.getChannel(chN)
 
         if newfig:
-            figure('CH%1d'%chN)
+            f=figure('CH%1d'%chN)
+            self.figL.append(f)
             title(chan.wfmD['WFID'], size=10)
         
         points=chan.points
@@ -441,7 +444,34 @@ class ScopeDisplay(object):
         grid(1)
 
         if showMeas: self.displayMeasurements((chN,) )
-                                     
+
+    def onclick(self, event):
+        ax = gca()
+        fig = ax.get_figure()
+        xmin,xmax=ax.get_xlim()
+        ymin,ymax=ax.get_ylim()        
+        inside = event.xdata< xmax and event.xdata> xmin and event.ydata<ymax and event.ydata>ymin
+        if not inside: return 
+        
+        if fig in self.figL:
+            self.lastTxt = text(event.xdata, event.ydata, self.tag)
+            fig.canvas.draw()
+            self.figL.remove(fig) # just one annotation
+            # could register callbacks when done
+        
+    def annotate_plots(self):
+        # add an annotation to zero or more of the plots for the current data acquisition
+
+
+        for fig in self.figL:
+            print 'register events for ', fig.get_label()
+            cid = fig.canvas.mpl_connect('button_press_event', self.onclick)
+            fig.show()
+            
+        if not self.tag:
+            self.tag = raw_input("Enter a tag description: ")
+
+
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
     tds2024 = TDS2024(debug=False)
@@ -456,12 +486,13 @@ if __name__ == '__main__':
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
         acqD =  {3:mT, 2: mT, 1: mT}
-        tds2024.acquire(acqD, tag='approach up to string' )
+        tds2024.acquire(acqD )
         pl=ScopeDisplay(tds2024)
         pl.plotChannel(3)
         pl.plotChannel(2, scopeView=False)
         pl.plotChannel(1, scopeView=False)    
-        pl.plotAll()   
+        pl.plotAll()
+        pl.annotate_plots( )
         show()
     if 0:  # options please!!!!
         tds2024.showFileSystem()
