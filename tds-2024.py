@@ -25,7 +25,7 @@ import datetime
 from matplotlib import rc, use
 rc('text', usetex=False)
 rc('font', family='monospace')  # LOOKs like a scope  ;-)
-use('WXAGG')
+use("GtkAgg")
 
 from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title, ion, ioff
 from numpy import array, arange
@@ -457,11 +457,10 @@ class ScopeDisplay(object):
             self.lastTxt = text(event.xdata, event.ydata, self.tag)
             fig.canvas.draw()
             self.figL.remove(fig) # just one annotation
-            # could register callbacks when done
+            # could deregister callbacks when done
         
     def annotate_plots(self):
         # add an annotation to zero or more of the plots for the current data acquisition
-
 
         for fig in self.figL:
             print 'register events for ', fig.get_label()
