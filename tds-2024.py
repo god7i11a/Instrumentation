@@ -25,9 +25,13 @@ import datetime
 from matplotlib import rc, use
 rc('text', usetex=False)
 rc('font', family='monospace')  # LOOKs like a scope  ;-)
-use("GtkAgg")
+# WXAgg: problems with draw below() .... use ginput() ???
+# GtkAgg: /usr/lib/python2.7/dist-packages/matplotlib/backends/backend_gtk.py:253: Warning: Source ID 5 was not found when attempting to remove it
+#  gobject.source_remove(self._idle_event_id)
+use("TkAgg")
 
-from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title, ion, ioff
+from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title, rcParams, savefig
+rcParams['savefig.directory'] = None  # use default
 from numpy import array, arange
 from math import log10, ceil
 from string import split, upper
@@ -345,7 +349,7 @@ class ScopeDisplay(object):
         self.instr=instr
         self.figL=[]
         self.tag=None
-        
+        self.cidD={}
     def plotAll(self):
         f=figure('CHALL')
         self.figL.append(f)
@@ -458,13 +462,16 @@ class ScopeDisplay(object):
             fig.canvas.draw()
             self.figL.remove(fig) # just one annotation
             # could deregister callbacks when done
-        
+            fig.canvas.mpl_disconnect(self.cidD[fig])
+            self.cidD.pop(fig)
+            savefig(fig.get_label()+'-'+TimeStamp+'.png')
+
     def annotate_plots(self):
         # add an annotation to zero or more of the plots for the current data acquisition
 
         for fig in self.figL:
-            print 'register events for ', fig.get_label()
             cid = fig.canvas.mpl_connect('button_press_event', self.onclick)
+            self.cidD[fig]=cid
             fig.show()
             
         if not self.tag:
