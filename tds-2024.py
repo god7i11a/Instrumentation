@@ -293,19 +293,19 @@ class Trigger(object):
     def _setD(self, typ, kwD):
         query=self._instr.cmd
         setT = self.trigTypesD[typ].keys()
-        name = 'TRIGGER:MAIN:'
-        key=''
-        pref=typ
-        if pref != 'MAIN':
-            name=name + pref + ':'
+        name = '%s:'%typ
         for key, val in kwD.items():
             if key not in setT: raise IndexError('%s not in (%s)'%(key,setT))
-            self[name+'%s'%key] = val
+            self[name+key] = val
             
-    def setTrigger(self, typ, **kwD):
-        if typ not in self.trigTypesD.keys(): raise TypeError('%s is not a trigger type'%typ)
-        self._setD(typ, kwD)
-        self['TYPE'] = typ
+    def setTrigger(self, level, mode, holdo=None, typ=None, trigD=None):
+        if level: self['LEVEL'] = level
+        if mode: self'[MODE'] = mode
+        if holdo: self['HOLDO'] = holdo
+        if typ: 
+            if typ not in self.trigTypesD.keys(): raise TypeError('%s is not a trigger type'%typ)
+            self._setD(typ, trigD)
+            self['TYPE'] = typ
 
     def acqSettings(self):
         self.acqState()
@@ -409,7 +409,7 @@ class TDS2024(Serial):
     __del__ = complete
 
     def acquire(self, chmD, prepChannels=True):
-        self._trigger.setTrigger('EDGE', SOU='CH3', LEVEL=4.55)
+        self._trigger.setTrigger(level=4.55, mode='NORMAL', holdo = None, typ='EDGE', trigD={'SOU':'CH3'})
         self._trigger.acqSettings()
         self.prepare()
         self.getSweepSetting()
