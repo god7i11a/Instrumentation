@@ -230,6 +230,98 @@ class Channel(object):
             
         if self._instr._debug: print self.trace
 
+class Trigger(object):
+    trigFuncD = {'STATE': None, # No MAIN: prepended, shrug
+                 'MODE': None,
+                 'TYPE': None,
+                 'LEVEL': float,
+                 'HOLDO': float,
+                 'EDGE:SOU': None,
+                 'EDGE:COUP': None,
+                 'EDGE:SLO': None,
+                 'PULS:SOU': None ,
+                 'PULS:WIDTH:POL': None, 
+                 'PULS:WIDTH:WHEN': None,
+                 'PULS:WIDTH:WIDTH': float,
+                 'VID:SOU': None,
+                 'VID:LINE': int,
+                 'VID:POL': None,
+                 'VID:STAND': None,
+                 'VID:SYNC': None
+                }
+    trigT = trigFuncD.keys()
+    # no comment, must be a simpler way, have no time to figure it out!!!!!:
+    mainD = {}
+    edgeD = {}
+    pulsD = {}
+    vidD  = {}
+    for key in ('MODE', 'TYPE', 'LEVEL', 'HOLDO'):
+        mainD[key] = trigFuncD[key]
+    for key in ('SOU', 'COUP', 'SLO'):
+        edgeD[key] = trigFuncD['EDGE:%s'%key]
+    for key in ('WIDTH:POL', 'WIDTH:WHEN', 'WIDTH:WIDTH', 'SOU'):
+        pulsD[key] = trigFuncD['PULS:%s'%key]
+    for key in ('SOU', 'LINE', 'POL', 'STAND', 'SYNC'):
+        vidD[key] = trigFuncD['VID:%s'%key]
+
+    trigTypesD={'MAIN':mainD, 'EDGE':edgeD, 'PULS':pulsD, 'VID':vidD}
+                
+    def __init__(self, instr):
+        self._instr = instr
+        self._trigD = {}
+
+    def acqState(self):
+        # first update from scope
+        self._trigD['STATE'] = self._instr.query_val('TRIG:STATE?')
+        return self._trigD['STATE']
+
+    def _acqD(self, typ):
+        query=self._instr.query_val
+        theD = self.trigTypesD[typ]
+        name = 'TRIGGER:MAIN:'
+        key=''
+        pref=typ
+        if pref != 'MAIN':
+            name=name + pref + ':'
+            key=pref+':'
+        for s, func in theD.items():
+            val = query(name+'%s?'%s)
+            if func:
+                val = func(val)
+            self._trigD[key+s]=val
+
+    def _setD(self, typ, kwD):
+        query=self._instr.cmd
+        setT = self.trigTypesD[typ].keys()
+        name = 'TRIGGER:MAIN:'
+        key=''
+        pref=typ
+        if pref != 'MAIN':
+            name=name + pref + ':'
+        for key, val in kwD.items():
+            if key not in setT: raise IndexError('%s not in (%s)'%(key,setT))
+            self[name+'%s'%key] = val
+            
+    def setTrigger(self, typ, **kwD):
+        if typ not in self.trigTypesD.keys(): raise TypeError('%s is not a trigger type'%typ)
+        self._setD(typ, kwD)
+        self['TYPE'] = typ
+
+    def acqSettings(self):
+        self.acqState()
+        self._acqD('MAIN')
+        self._acqD(self._trigD['TYPE'])
+
+    def __getitem__(self, key):
+        return self._trigD[key]
+
+    def __setitem__(self, key, val):
+        if key not in self.trigT: raise ValueError('%s not in trigger dictionary'%key)
+        self._instr.cmd('TRIGGER:MAIN:%s %s'%(key, val)) # in instrument
+        # now store local
+        self._trigD[key]=val
+        
+        
 class TDS2024(Serial):
     """
     TODO ideas:
@@ -244,11 +336,18 @@ class TDS2024(Serial):
         self._port = port
         self._debug = debug
         super(TDS2024,self ).__init__(port, 9600, timeout=None)
-        self.sendBreak()
-        sleep(sleeptime)
-        resp=self.readline()
-        if resp[0:3] != 'DCL':
-            raise ValueError('Serial port did not return DCL! (%s)'%resp )
+        cnt=10
+        while 1:
+            print 'X',
+            self.sendBreak()
+            sleep(sleeptime)
+            resp=self.readline()
+            if resp[0:3] == 'DCL':
+                print 
+                break
+            cnt=cnt-1
+            if cnt==0:  raise ValueError('Serial port did not return DCL! (%s)'%resp )
+            
         sleep(sleeptime)
         self.write('*IDN?\n')
         sleep(sleeptime)
@@ -262,6 +361,7 @@ class TDS2024(Serial):
         self._channelAcqL=[]
         for i in (1,2,3,4):
             self._channelL.append( Channel(i,self) )
+        self._trigger = Trigger(self)
 
     def getChannel(self, chN):
         return self._channelL[chN-1]
@@ -269,7 +369,7 @@ class TDS2024(Serial):
         return chN in self._chanAcqL
     def getacqTag(self):
         return self._acqtag
-    
+
     def query(self, req, nBytes=None):
         if self._debug:
             print "send to Serial: ", req
@@ -281,7 +381,11 @@ class TDS2024(Serial):
             resp=self.readline()
         if self._debug:
             print "got from Serial: ", resp,
-        return resp
+        return resp  # for dog's sake, remove the CR once and for all
+
+    def query_val(self, req):
+        resp = self.query(req)
+        return resp.strip().split()[-1]
 
     def query_float(self, req):
         resp = self.query(req)
@@ -305,6 +409,8 @@ class TDS2024(Serial):
     __del__ = complete
 
     def acquire(self, chmD, prepChannels=True):
+        self._trigger.setTrigger('EDGE', SOU='CH3', LEVEL=4.55)
+        self._trigger.acqSettings()
         self.prepare()
         self.getSweepSetting()
         self._chanAcqL=chmD.keys()
@@ -480,7 +586,7 @@ class ScopeDisplay(object):
 
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
-    tds2024 = TDS2024(debug=False)
+    tds2024 = TDS2024(debug=True)
 
     if 0:
         from pickle import dump, load
@@ -502,8 +608,3 @@ if __name__ == '__main__':
         show()
     if 0:  # options please!!!!
         tds2024.showFileSystem()
-    if 0:
-        acqD =  {3:('PK2P', 'PERI', 'FALL', 'RISE'), 2: ('FALL', 'RISE'), 1: ('FALL', 'RISE') }
-        tds2024.acquire(acqD )
-        tds2024.plotAll()           
-        show()
