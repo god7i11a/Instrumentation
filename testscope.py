@@ -104,10 +104,15 @@ class DummyScope(TektronixScope):
     _rbuf = None
     _vars = {}
     while 1:
-        kreq = _reqL.next()
-        print req, 
-        resp = _reqL.next()
-        print resp
+        try:
+            kreq = _reqL.next()
+            print kreq, 
+            resp = _reqL.next()
+            print resp
+        except StopIteration:
+            break
+        
+    print 'done'
     
     def connect(self):
         pass
@@ -150,7 +155,7 @@ class DummyScope(TektronixScope):
             return 
             
 if __name__=='__main__':
-    tds2024 = DummyScope()
+    tds2024 = DummyScope(port=None, debug=True)
     mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
     tds2024.setTrigger(level=4.56, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH3'})
     print tds2024.getTrigger(forceAcq=True)
