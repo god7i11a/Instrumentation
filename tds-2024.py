@@ -230,7 +230,8 @@ class Channel(object):
             
         if self._instr._debug: print self.trace
 
-class Trigger(object):
+
+class TriggerControl(object):
     trigFuncD = {'STATE': None, # No MAIN: prepended, shrug
                  'MODE': None,
                  'TYPE': None,
@@ -298,24 +299,36 @@ class Trigger(object):
             if key not in setT: raise IndexError('%s not in (%s)'%(key,setT))
             self[name+key] = val
             
-    def setTrigger(self, level, mode, holdo=None, typ=None, trigD=None):
-        if level: self['LEVEL'] = level
-        if mode: self'[MODE'] = mode
-        if holdo: self['HOLDO'] = holdo
+    def setTrigger(self, level, mode, holdo, typ, trigD):
+        print level, mode, holdo, typ, trigD
+        self['LEVEL'] = level
+        self['MODE'] = mode
+        self['HOLDO'] = holdo
         if typ: 
             if typ not in self.trigTypesD.keys(): raise TypeError('%s is not a trigger type'%typ)
             self._setD(typ, trigD)
             self['TYPE'] = typ
+
+    def getTrigger(self, forceAcq = False):
+        print forceAcq
+        if forceAcq: self.acqSettings()
+        # get the type of trigger:
+        trigD = {key: self[key] for key in ('LEVEL', 'HOLDO', 'MODE', 'TYPE', 'STATE') }
+        typ =  trigD['TYPE'] 
+        for key in self.trigTypesD[typ].keys():
+            trigD[key]= self[typ+':'+ key]
+        return trigD
 
     def acqSettings(self):
         self.acqState()
         self._acqD('MAIN')
         self._acqD(self._trigD['TYPE'])
 
-    def __getitem__(self, key):
+    def __getitem__(self, key): # upwards
         return self._trigD[key]
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key, val): # downwards
+        if not val: return 
         if key not in self.trigT: raise ValueError('%s not in trigger dictionary'%key)
         self._instr.cmd('TRIGGER:MAIN:%s %s'%(key, val)) # in instrument
         # now store local
@@ -361,7 +374,7 @@ class TDS2024(Serial):
         self._channelAcqL=[]
         for i in (1,2,3,4):
             self._channelL.append( Channel(i,self) )
-        self._trigger = Trigger(self)
+        self._triggerCtl = TriggerControl(self)
 
     def getChannel(self, chN):
         return self._channelL[chN-1]
@@ -369,6 +382,12 @@ class TDS2024(Serial):
         return chN in self._chanAcqL
     def getacqTag(self):
         return self._acqtag
+
+    def setTrigger(self, level, mode, holdo, typ, trigD ):
+        self._triggerCtl.setTrigger(level, mode, holdo, typ, trigD )
+
+    def getTrigger(self, forceAcq):
+        return self._triggerCtl.getTrigger(forceAcq)
 
     def query(self, req, nBytes=None):
         if self._debug:
@@ -409,8 +428,7 @@ class TDS2024(Serial):
     __del__ = complete
 
     def acquire(self, chmD, prepChannels=True):
-        self._trigger.setTrigger(level=4.55, mode='NORMAL', holdo = None, typ='EDGE', trigD={'SOU':'CH3'})
-        self._trigger.acqSettings()
+        self._triggerCtl.acqSettings()
         self.prepare()
         self.getSweepSetting()
         self._chanAcqL=chmD.keys()
@@ -597,6 +615,8 @@ if __name__ == '__main__':
 
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
+        tds2024.setTrigger(level=4.56, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH3'})
+        print tds2024.getTrigger(forceAcq=True)
         acqD =  {3:mT, 2: mT, 1: mT}
         tds2024.acquire(acqD )
         pl=ScopeDisplay(tds2024)
