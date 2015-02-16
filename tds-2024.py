@@ -358,9 +358,8 @@ class TriggerControl(object):
         self._instr.cmd('TRIGGER:MAIN:%s %s'%(key, val)) # in instrument
         # now store local
         self._trigD[key]=val
-        
-        
-class TDS2024(Serial):
+
+class TektronixScope(object):
     """
     TODO ideas:
     1. could have a channels class, and add four to this device
@@ -368,24 +367,19 @@ class TDS2024(Serial):
     3. could handle various kinds of trigger and setup condx to satisfy grabbing data
     4. could autostore data (tables best for this)
     """
-    _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
     
-    def __init__(self, port="/dev/ttyS0", debug=False):
+    def __init__(self, port=None, debug=False):
         self._port = port
         self._debug = debug
-        super(TDS2024,self ).__init__(port, 9600, timeout=None)
-        cnt=10
-        while 1:
-            print 'X',
-            self.sendBreak()
-            sleep(sleeptime)
-            resp=self.readline()
-            if resp[0:3] == 'DCL':
-                print 
-                break
-            cnt=cnt-1
-            if cnt==0:  raise ValueError('Serial port did not return DCL! (%s)'%resp )
-            
+        self._channelL=[]
+        self._channelAcqL=[]
+        for i in (1,2,3,4):
+            self._channelL.append( Channel(i,self) )
+        self._triggerCtl = TriggerControl(self)
+        self._horCtl = HorizontalControl(self)
+
+        self.connect()
+
         sleep(sleeptime)
         self.write('*IDN?\n')
         sleep(sleeptime)
@@ -395,12 +389,6 @@ class TDS2024(Serial):
         else:
             raise ValueError('Failed to get instrument id (%s)'%resp)
 
-        self._channelL=[]
-        self._channelAcqL=[]
-        for i in (1,2,3,4):
-            self._channelL.append( Channel(i,self) )
-        self._triggerCtl = TriggerControl(self)
-        self._horCtl = HorizontalControl(self)
 
     def getChannel(self, chN):
         return self._channelL[chN-1]
@@ -487,6 +475,39 @@ class TDS2024(Serial):
 
     def showFileSystem(self):
         print self.query('FILES:DIR?')
+    
+        
+class TDS2024(TektronixScope):
+    _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
+
+    def __init__(self, port='/dev/ttyS0', **kwD):
+        super(TDS2024, self).__init__(port, kwD)
+
+    def connect(self):
+        self.serial = Serial(self._port, 9600, timeout=None)
+        self.read = self.serial.read
+        self.readline = self.serial.readline
+        self.write = self.serial.write
+        cnt=10
+        while 1:
+            self.serial.sendBreak() # doesnt seem to handle if other stuff in the queue
+            sleep(sleeptime)
+            resp=self.readline()
+            if resp == 'DCL\0\n':   #  should see: [68, 67, 76, 0, 10]
+                # we may have another DCL in the queue because we've repeated
+                if cnt==9:
+                    resp=self.readline()
+                    self.serial.flushInput()
+                    self.serial.flushOutput()
+                if self._debug: print map(ord,resp)
+                print 
+                break
+            if self._debug:
+                print 'X',
+                print map(ord, resp)
+            cnt=cnt-1
+            if cnt==0:  raise ValueError('Serial port did not return DCL! (%s)'%resp )
+            
 
 class TestScope(TDS2024):
     def acquire(self, chmD, prepChannels=True):
