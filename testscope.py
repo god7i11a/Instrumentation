@@ -12,109 +12,102 @@ Sample mode', 'BIT_NR': 8, 'YUNIT': 'Volts', 'XZERO': -0.15,
 'YOFF': -166.0, 'BYT_OR': 'LSB', 'YZERO': 0.0}
 """
 _cmdStr = """    
-end to Serial:  TRIGGER:MAIN:LEVEL 4.56
-send to Serial:  TRIGGER:MAIN:MODE NORMAL
-send to Serial:  TRIGGER:MAIN:EDGE:SOU CH3
-send to Serial:  TRIGGER:MAIN:TYPE EDGE
-send to Serial:  TRIG:STATE?
-got from Serial:  :TRIGGER:STATE SAVE
-send to Serial:  TRIGGER:MAIN:HOLDO?
-got from Serial:  :TRIGGER:MAIN:HOLDOFF:VALUE 5.0E-7
-send to Serial:  TRIGGER:MAIN:TYPE?
-got from Serial:  :TRIGGER:MAIN:TYPE EDGE
-send to Serial:  TRIGGER:MAIN:MODE?
-got from Serial:  :TRIGGER:MAIN:MODE NORMAL
-send to Serial:  TRIGGER:MAIN:LEVEL?
-got from Serial:  :TRIGGER:MAIN:LEVEL 4.56E0
-send to Serial:  TRIGGER:MAIN:EDGE:COUP?
-got from Serial:  :TRIGGER:MAIN:EDGE:COUPLING DC
-send to Serial:  TRIGGER:MAIN:EDGE:SLO?
-got from Serial:  :TRIGGER:MAIN:EDGE:SLOPE FALL
-send to Serial:  TRIGGER:MAIN:EDGE:SOU?
-got from Serial:  :TRIGGER:MAIN:EDGE:SOURCE CH3
-send to Serial:  TRIG:STATE?
-got from Serial:  :TRIGGER:STATE SAVE
-send to Serial:  TRIGGER:MAIN:HOLDO?
-got from Serial:  :TRIGGER:MAIN:HOLDOFF:VALUE 5.0E-7
-send to Serial:  TRIGGER:MAIN:TYPE?
-got from Serial:  :TRIGGER:MAIN:TYPE EDGE
-send to Serial:  TRIGGER:MAIN:MODE?
-got from Serial:  :TRIGGER:MAIN:MODE NORMAL
-send to Serial:  TRIGGER:MAIN:LEVEL?
-got from Serial:  :TRIGGER:MAIN:LEVEL 4.56E0
-send to Serial:  TRIGGER:MAIN:EDGE:COUP?
-got from Serial:  :TRIGGER:MAIN:EDGE:COUPLING DC
-send to Serial:  TRIGGER:MAIN:EDGE:SLO?
-got from Serial:  :TRIGGER:MAIN:EDGE:SLOPE FALL
-send to Serial:  TRIGGER:MAIN:EDGE:SOU?
-got from Serial:  :TRIGGER:MAIN:EDGE:SOURCE CH3
-send to Serial:  acquire:state on
-send to Serial:  hor:mai:sca?
-got from Serial:  :HORIZONTAL:MAIN:SCALE 5.0E-2  query_float:0.05
-send to Serial:  CH1:scale?
-got from Serial:  :CH1:SCALE 5.0E-1   query_float:0.5
-send to Serial:  measu:imm:typ FALL;:measu:imm:sou CH1
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 0.0E0   query_float:0.0
-send to Serial:  measu:imm:typ RISE;:measu:imm:sou CH1
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 0.0E0   query_float:0.0
-send to Serial:  measu:imm:typ PK2P;:measu:imm:sou CH1
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 1.400003433E-1   query_float:0.1400003433
-send to Serial:  measu:imm:typ CRMS;:measu:imm:sou CH1
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 4.8800115585E0  query_float:4.8800115585
-send to Serial:  DATA:SOURCE CH1
-send to Serial:  wfmpre?
-got from Serial:  :WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch1, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -1.66E2;YUNIT "Volts"
-send to Serial:  curv?
-got from Serial:  :CURVE #4 Acquiring 2500 points  [ 4.88  4.88  4.86 ...,  4.88  4.88  4.9 ]
-send to Serial:  CH2:scale?
-got from Serial:  :CH2:SCALE 5.0E-1   query_float:0.5
-send to Serial:  measu:imm:typ FALL;:measu:imm:sou CH2
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 0.0E0   query_float:0.0
-send to Serial:  measu:imm:typ RISE;:measu:imm:sou CH2
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 0.0E0    query_float:0.0
-send to Serial:  measu:imm:typ PK2P;:measu:imm:sou CH2
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 1.400003433E-1    query_float:0.1400003433
-send to Serial:  measu:imm:typ CRMS;:measu:imm:sou CH2
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 4.8634057045E0    query_float:4.8634057045
-send to Serial:  DATA:SOURCE CH2
-send to Serial:  wfmpre?
-got from Serial:  :WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch2, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -1.91E2;YUNIT "Volts"
-send to Serial:  curv?
-got from Serial:  :CURVE #4 Acquiring 2500 points    [ 4.86  4.86  4.82 ...,  4.84  4.88  4.88]
-send to Serial:  CH3:scale?
-got from Serial:  :CH3:SCALE 5.0E-1    query_float:0.5
-send to Serial:  measu:imm:typ FALL;:measu:imm:sou CH3
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 4.0E-4    query_float:0.0004
-send to Serial:  measu:imm:typ RISE;:measu:imm:sou CH3
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 1.4E-3    query_float:0.0014
-send to Serial:  measu:imm:typ PK2P;:measu:imm:sou CH3
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 9.99999046E-2    query_float:0.0999999046
-send to Serial:  measu:imm:typ CRMS;:measu:imm:sou CH3
-send to Serial:  measu:imm:val?
-got from Serial:  :MEASUREMENT:IMMED:VALUE 4.9288582802E0    query_float:4.9288582802
-send to Serial:  DATA:SOURCE CH3
-send to Serial:  wfmpre?
-got from Serial:  :WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch3, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -2.21E2;YUNIT "Volts"
-send to Serial:  curv?
-got from Serial:  :CURVE #4 Acquiring 2500 points   [ 4.9   4.94  4.92 ...,  4.94  4.92  4.94]
-send to Serial:  acquire:state off
+TRIGGER:MAIN:LEVEL 4.56
+TRIGGER:MAIN:MODE NORMAL
+TRIGGER:MAIN:EDGE:SOU CH3
+TRIGGER:MAIN:TYPE EDGE
+acquire:state on
+DATA:SOURCE CH1
+measu:imm:typ FALL;:measu:imm:sou CH1
+measu:imm:typ FALL;:measu:imm:sou CH2
+measu:imm:typ RISE;:measu:imm:sou CH1
+measu:imm:typ RISE;:measu:imm:sou CH2
+measu:imm:typ PK2P;:measu:imm:sou CH1
+measu:imm:typ PK2P;:measu:imm:sou CH2
+measu:imm:typ CRMS;:measu:imm:sou CH1
+measu:imm:typ CRMS;:measu:imm:sou CH2
+DATA:SOURCE CH2
+measu:imm:typ FALL;:measu:imm:sou CH3
+measu:imm:typ RISE;:measu:imm:sou CH3
+measu:imm:typ PK2P;:measu:imm:sou CH3
+measu:imm:typ CRMS;:measu:imm:sou CH3
+DATA:SOURCE CH3
+acquire:state off
+"""
+_reqStr = """
+TRIG:STATE?
+:TRIGGER:STATE SAVE
+TRIGGER:MAIN:HOLDO?
+:TRIGGER:MAIN:HOLDOFF:VALUE 5.0E-7
+TRIGGER:MAIN:TYPE?
+:TRIGGER:MAIN:TYPE EDGE
+TRIGGER:MAIN:MODE?
+:TRIGGER:MAIN:MODE NORMAL
+TRIGGER:MAIN:LEVEL?
+:TRIGGER:MAIN:LEVEL 4.56E0
+TRIGGER:MAIN:EDGE:COUP?
+:TRIGGER:MAIN:EDGE:COUPLING DC
+TRIGGER:MAIN:EDGE:SLO?
+:TRIGGER:MAIN:EDGE:SLOPE FALL
+TRIGGER:MAIN:EDGE:SOU?
+:TRIGGER:MAIN:EDGE:SOURCE CH3
+hor:mai:sca?
+:HORIZONTAL:MAIN:SCALE 5.0E-2
+CH1:scale?
+:CH1:SCALE 5.0E-1
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 0.0E0
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 0.0E0
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 1.400003433E-1
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 4.8800115585E0
+wfmpre?
+:WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch1, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -1.66E2;YUNIT "Volts"
+curv?
+[ 4.88  4.88  4.86 ...,  4.88  4.88  4.9 ]
+CH2:scale?
+:CH2:SCALE 5.0E-1
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 0.0E0
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 0.0E0
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 1.400003433E-1
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 4.8634057045E0
+wfmpre?
+:WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch2, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -1.91E2;YUNIT "Volts"
+curv?
+[ 4.86  4.86  4.82 ...,  4.84  4.88  4.88]
+CH3:scale?
+:CH3:SCALE 5.0E-1
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 4.0E-4
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 1.4E-3
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 9.99999046E-2
+measu:imm:val?
+:MEASUREMENT:IMMED:VALUE 4.9288582802E0
+wfmpre?
+:WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT 2500;WFID "Ch3, DC coupling, 5.0E-1 V/div, 5.0E-2 s/div, 2500 points, Sample mode";PT_FMT Y;XINCR 2.0E-4;PT_OFF 0;XZERO -1.5E-1;XUNIT "s";YMULT 2.0E-2;YZERO 0.0E0;YOFF -2.21E2;YUNIT "Volts"
+curv?
+got from Serial: [ 4.9   4.94  4.92 ...,  4.94  4.92  4.94]
 
 """
+_reqL = iter( _reqStr[1:-1].split('\n'))
 
 class DummyScope(TektronixScope):
     _idStr = 'Dummy'
     _rbuf = None
+    _vars = {}
+    while 1:
+        kreq = _reqL.next()
+        print req, 
+        resp = _reqL.next()
+        print resp
     
     def connect(self):
         pass
@@ -140,15 +133,11 @@ class DummyScope(TektronixScope):
         print 'req: ', buf
         self._rbuf=''
         
-    def _set(self, key, val):
+    def _cmd(self, key, val):
         print 'set %s = %s '%(key, val)
         self._vars[key]=val
         self._rbuf=None
 
-    def _cmd(self, buf):
-        print 'cmd: ', buf
-        self._rbuf=None
-        
     def write(self, buf):
         buf=buf.strip()
         if buf[-1]=='?':
@@ -156,14 +145,10 @@ class DummyScope(TektronixScope):
             return
         bufL = buf.split(' ')
         n = len(bufL)
-        if n==1: # set
-            self._set(bufL[0], bufL[1])
+        if n==2: # set
+            self._cmd(bufL[0], bufL[1])
             return 
-        self._cmd(buf)
             
-    def readline(self):
-        pass
-
 if __name__=='__main__':
     tds2024 = DummyScope()
     mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
@@ -177,5 +162,5 @@ if __name__=='__main__':
     pl.plotChannel(1, scopeView=False)    
     pl.plotAll()
     pl.annotate_plots( )
-    show()
+    pl.show()
     
