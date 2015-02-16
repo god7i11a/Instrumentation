@@ -12,6 +12,9 @@
 # Version 0.1 -- 6/7 Feb 2015 first version, uses serial interface, will do USB and GPIB later.
 #                starting with TDS 2024, probably useful for many others
 # Version 0.2 -- 10 Feb 2015 many improvements to code, in good working order, ready to be extended as needed. 
+# Version 0.3 -- 15 Feb 2015 added a TriggerControl class, could use some ugly-code-->gorgeous-code adjustments
+#                started tracking the trigger position in the plots. 
+#                Adding a HORizontal control. CH, DAT, and DIS to follow
 #
 #
 # adapated from : http://www.febo.com/geekworks/data-capture/tds-2012.html cf. https://gist.github.com/pklaus/320584 
@@ -230,6 +233,28 @@ class Channel(object):
             
         if self._instr._debug: print self.trace
 
+class HorizontalControl(object):
+    horFuncD = { 'HOR:VIEW': None,
+                 'HOR:MAIN:POS': float,
+                 'HOR:MAIN:SCA': float
+                }
+    horT = horFuncD.keys()
+                
+    def __init__(self, instr):
+        self._instr = instr
+        self._horD = {}
+
+    def __getitem__(self, key): # upwards
+        val= self._instr.query_val(key)
+        func = self.horFuncD[val]
+        if func:
+            val = func(val)
+        return val
+
+    def __setitem__(self, key, val): # downwards
+        if not val: return 
+        if key not in self.horT: raise ValueError('%s not in trigger dictionary'%key)
+        self._instr.cmd('%s %s'%(key, val)) # in instrument
 
 class TriggerControl(object):
     trigFuncD = {'STATE': None, # No MAIN: prepended, shrug
@@ -375,6 +400,7 @@ class TDS2024(Serial):
         for i in (1,2,3,4):
             self._channelL.append( Channel(i,self) )
         self._triggerCtl = TriggerControl(self)
+        self._horCtl = HorizontalControl(self)
 
     def getChannel(self, chN):
         return self._channelL[chN-1]
