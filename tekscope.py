@@ -407,6 +407,12 @@ class TektronixScope(object):
             print "got from Serial: ", resp,
         return resp  # for dog's sake, remove the CR once and for all
 
+    def setAcqState(self, state, stopAfter='RUNSTOP'):
+        if state not in ('STOP', 'RUN', 'ON', 'OFF'):
+            raise ValueError('Not an acquisition state: %s'%state)
+        self.cmd('ACQ:STATE %s'%state)
+        self.cmd('ACQ:STOPA %s'%stopAfter)
+        
     def query_val(self, req):
         resp = self.query(req)
         return resp.strip().split()[-1]
@@ -515,9 +521,11 @@ if __name__ == '__main__':
 
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
-        tds2024.setTrigger(level=4.56, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH3'})
+        mT= ('FREQ', 'PK2P', 'MINI', 'MAXI')
+        tds2024.setTrigger(level=0.5, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH2', 'SLO':'RIS'})
+        tds2024.setAcqState('RUN', stopAfter='SEQ')
         print tds2024.getTrigger(forceAcq=True)
-        acqD =  {3:mT, 2: mT, 1: mT}
+        acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
         tds2024.acquire(acqD )
         pl=ScopeDisplay(tds2024, idStr=TimeStamp)
         pl.plotChannel(3)
