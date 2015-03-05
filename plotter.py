@@ -15,17 +15,27 @@ from numpy import arange
 class ScopeDisplay(object):
     colorD = {1:'yellow', 2: 'aqua', 3: 'purple', 4: 'darkgreen'} # approx channel colors
 
-    def __init__(self, instr, idStr):
+    def __init__(self, instr, idStr, disp=False, save=True):
         self.instr=instr
         self.idStr=idStr
         self.figL=[]
         self.tag=None
         self.cidD={}
-    def plotAll(self):
+        self.save=save  # should come up with some graphical way to ask for annotate/save
+        if disp: self.display()
+
+    def display(self):
+        chNL = [ ch for ch in range(1,5)  if self.instr.channelWasAcq(ch) ]
+        for ch in chNL:
+            self.plotChannel(ch, scopeView=False)
+        self.plotAll(chNL)
+        if self.save: self.annotate_plots()
+        self.show()
+
+    def plotAll(self, chNL):
         f=figure('CHALL')
         self.figL.append(f)
         measD={}
-        chNL = [ ch for ch in range(1,5)  if self.instr.channelWasAcq(ch) ]
         for chN in chNL:
             self.plotChannel(chN, scopeView=True, newfig=False, showMeas=False)
         self.displayMeasurements(chNL, addIDatTop=True)

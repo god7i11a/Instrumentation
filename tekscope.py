@@ -496,7 +496,7 @@ class TDS2024(TektronixScope):
             if resp == 'DCL\0\n':   #  should see: [68, 67, 76, 0, 10]
                 # we may have another DCL in the queue because we've repeated
                 if cnt==9:
-                    resp=self.readline()
+                    resp=self.readline()  # hangs here sometimes.
                     self.serial.flushInput()
                     self.serial.flushOutput()
                 if self._debug: print map(ord,resp)
@@ -522,17 +522,13 @@ if __name__ == '__main__':
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
         mT= ('FREQ', 'PK2P', 'MINI', 'MAXI')
-        tds2024.setTrigger(level=0.5, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH2', 'SLO':'RIS'})
+        tds2024.setTrigger(level=0.25, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH1', 'SLO':'RIS'})
         tds2024.setAcqState('RUN', stopAfter='SEQ')
         print tds2024.getTrigger(forceAcq=True)
         acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
+        acqD =  {1: mT}
         tds2024.acquire(acqD )
-        pl=ScopeDisplay(tds2024, idStr=TimeStamp)
-        pl.plotChannel(3)
-        pl.plotChannel(2, scopeView=False)
-        pl.plotChannel(1, scopeView=False)    
-        pl.plotAll()
-        pl.annotate_plots( )
-        pl.show()
+        ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=False)
+
     if 0:  # options please!!!!
         tds2024.showFileSystem()
