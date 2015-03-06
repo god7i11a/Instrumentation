@@ -146,7 +146,7 @@ class ScopeDisplay(object):
             # could deregister callbacks when done
             fig.canvas.mpl_disconnect(self.cidD[fig])
             self.cidD.pop(fig)
-            savefig(fig.get_label()+'-'+self.idStr+'.png')
+            savefig('Traces/'+fig.get_label()+'-'+self.idStr+'.png')
 
     def annotate_plots(self):
         # add an annotation to zero or more of the plots for the current data acquisition
@@ -161,3 +161,7 @@ class ScopeDisplay(object):
 
     def show(self):
         show()
+
+if __name__ == '__main__':
+    tag = raw_input('Enter: ')
+    print tag

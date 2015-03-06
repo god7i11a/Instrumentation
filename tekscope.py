@@ -451,6 +451,18 @@ class TektronixScope(object):
             chan.acquire(prepChannels)
         self.complete()
 
+    def measLoop(self, chmD):
+        debug=self._debug
+        self._debug=False
+        while 1:
+            for ch,m in chmD.items():
+                chan = self.getChannel(ch)
+                chan.acqMeas(m)
+                print chan.getMeasStrD()
+            x = raw_input('Enter to continue, anything to quit: ')
+            if x: break
+        self._debug=debug
+
     def load(self):
         pass
 
@@ -522,13 +534,17 @@ if __name__ == '__main__':
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
         mT= ('FREQ', 'PK2P', 'MINI', 'MAXI')
-        tds2024.setTrigger(level=0.25, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH1', 'SLO':'RIS'})
-        tds2024.setAcqState('RUN', stopAfter='SEQ')
+        tds2024.setTrigger(level=0.25, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH2', 'SLO':'RIS'})
+        tds2024.setAcqState('RUN', stopAfter='RUNST')
         print tds2024.getTrigger(forceAcq=True)
         acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
-        acqD =  {1: mT}
+        acqD =  {2: mT}
         tds2024.acquire(acqD )
-        ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=False)
+        ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=True)
 
     if 0:  # options please!!!!
         tds2024.showFileSystem()
+
+    if 0:
+        acqD = {1: ('MEAN',)}
+        tds2024.measLoop(acqD)
