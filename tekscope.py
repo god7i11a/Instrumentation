@@ -387,7 +387,7 @@ class TektronixScope(object):
             self._channelL.append( Channel(i,self) )
         self._triggerCtl = TriggerControl(self)
         self._horCtl = HorizontalControl(self)
-        if horSccale: self._horCtl['HOR:MAIN:SCA']=horScale
+        if horScale: self._horCtl['HOR:MAIN:SCA']=horScale
         if horPos: self._horCtl['HOR:MAIN:POS']=horPos
 
     def identify(self):
