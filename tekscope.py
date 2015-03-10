@@ -140,6 +140,16 @@ class Channel(object):
             }
     wfmT = wfmFuncD.keys()
 
+    chFuncD = { 'BAN': None, 
+                'COUP': None,
+                'INV': None,
+                'POS': float,
+                'PROBE': int,
+                'SCA': float,
+                'YUNIT': None
+                }
+    chT = chFuncD.keys()    
+
     # :WFMPRE:BYT_NR 1;BIT_NR 8;ENCDG BIN;BN_FMT RI;BYT_OR LSB;NR_PT
     # 2500;WFID "Ch3, DC coupling, 5.0E-1 V/div, 1.0E-1 s/div, 2500
     # points, Sample mode";PT_FMT Y;XINCR 4.0E-4;PT_OFF 0;XZERO
@@ -153,7 +163,8 @@ class Channel(object):
         self._msmnt = Measurement(self.getImmed)
         self.wfmD = {}
 
-    def getVerticalSetting(self):
+        def getVerticalSetting(self):
+        # 2,5,10,20,50, 100,200,500 mV/div 1,2,5 V/div
         # get instrument settings
         voltsdiv=self._instr.query_float('%3s:scale?'%self._channel)
         
@@ -163,6 +174,12 @@ class Channel(object):
             volt_string = '%i\nmV/DIV' % (voltsdiv * 1000)
         self.voltStr = volt_string
         self.voltsdiv = voltsdiv
+
+    def __setitem__(self, key, val):
+        self._instr.cmd('CH%d:%s %s'%(self._channel, key, val))
+    def __getitem__(self, key):
+        ret = self._instr.query('CH%d:%s?'%(self._channel, key))
+        return map(self.chFuncD[key], (ret,))[0]
 
     def getImmed(self, typ):
         self._instr.cmd('measu:imm:typ %s;:measu:imm:sou %3s'%(typ,self._channel))
@@ -358,7 +375,7 @@ class TektronixScope(object):
     4. could autostore data (tables best for this)
     """
     
-    def __init__(self, port=None, debug=False):
+    def __init__(self, port=None, debug=False, horScale=None, horPos=None):
         self._port = port
         self._debug = debug
         self.connect()
@@ -370,6 +387,8 @@ class TektronixScope(object):
             self._channelL.append( Channel(i,self) )
         self._triggerCtl = TriggerControl(self)
         self._horCtl = HorizontalControl(self)
+        if horSccale: self._horCtl['HOR:MAIN:SCA']=horScale
+        if horPos: self._horCtl['HOR:MAIN:POS']=horPos
 
     def identify(self):
         sleep(sleeptime)
@@ -538,7 +557,7 @@ if __name__ == '__main__':
         tds2024.setAcqState('RUN', stopAfter='RUNST')
         print tds2024.getTrigger(forceAcq=True)
         acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
-        acqD =  {2: mT}
+        #acqD =  {2: mT}
         tds2024.acquire(acqD )
         ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=True)
 
