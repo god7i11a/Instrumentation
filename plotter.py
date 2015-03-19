@@ -115,8 +115,10 @@ class ScopeDisplay(object):
         
         if scopeView:
             axis([0,10,-4,4])
-            ylabel(chan.voltStr, size=labelSz)
+            #ylabel(chan.voltStr, size=labelSz)
+            text(-.75, 3-chN, chan.voltStr, color=self.colorD[chN], backgroundcolor='silver', size=8, family= 'monospace' )
             theaxes.set_yticklabels([])
+            # place trigger location, channel color, and zero baseline per channel, color
         else:
             miny=trace.min()
             maxy=trace.max()

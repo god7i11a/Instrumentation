@@ -163,7 +163,7 @@ class Channel(object):
         self._msmnt = Measurement(self.getImmed)
         self.wfmD = {}
 
-        def getVerticalSetting(self):
+    def getVerticalSetting(self):
         # 2,5,10,20,50, 100,200,500 mV/div 1,2,5 V/div
         # get instrument settings
         voltsdiv=self._instr.query_float('%3s:scale?'%self._channel)
@@ -552,12 +552,13 @@ if __name__ == '__main__':
 
     if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
-        mT= ('FREQ', 'PK2P', 'MINI', 'MAXI')
-        tds2024.setTrigger(level=0.25, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH2', 'SLO':'RIS'})
+        mT= ('FALL', 'RISE', 'MINI', 'MAXI')
+        #mT=('MEAN', )
+        tds2024.setTrigger(level=4.56, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH4', 'SLO':'FAL'})
         tds2024.setAcqState('RUN', stopAfter='RUNST')
         print tds2024.getTrigger(forceAcq=True)
-        acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
-        #acqD =  {2: mT}
+        #acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
+        acqD =  {3: mT, 4:mT}
         tds2024.acquire(acqD )
         ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=True)
 
