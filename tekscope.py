@@ -520,6 +520,7 @@ class TDS2024(TektronixScope):
 
     def clear(self):
         cnt=10
+        self.serial.timeout=1
         while 1:
             self.serial.sendBreak() # doesnt seem to handle if other stuff in the queue
             sleep(sleeptime)
@@ -527,7 +528,7 @@ class TDS2024(TektronixScope):
             if resp == 'DCL\0\n':   #  should see: [68, 67, 76, 0, 10]
                 # we may have another DCL in the queue because we've repeated
                 if cnt==9:
-                    resp=self.readline()  # hangs here sometimes.
+                    resp=self.readline()  # hangs here sometimes. put a timeout on it???
                     self.serial.flushInput()
                     self.serial.flushOutput()
                 if self._debug: print map(ord,resp)
@@ -538,6 +539,7 @@ class TDS2024(TektronixScope):
                 print map(ord, resp)
             cnt=cnt-1
             if cnt==0:  raise ValueError('Serial port did not return DCL! (%s)'%resp )
+        self.serial.timeout=None
 
 
 if __name__ == '__main__':
@@ -550,21 +552,21 @@ if __name__ == '__main__':
         tds2024.acquire(acqD )
         tds2024.dump()
 
-    if 1:
+    if 0:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
         mT= ('FALL', 'RISE', 'MINI', 'MAXI')
         #mT=('MEAN', )
-        tds2024.setTrigger(level=4.56, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH4', 'SLO':'FAL'})
+        tds2024.setTrigger(level=4.40, holdo=None, mode='NORMAL', typ='EDGE', trigD={'SOU':'CH2', 'SLO':'FAL'})
         tds2024.setAcqState('RUN', stopAfter='RUNST')
         print tds2024.getTrigger(forceAcq=True)
         #acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
-        acqD =  {3: mT, 4:mT}
+        acqD =  {1: mT, 2: mT}
         tds2024.acquire(acqD )
         ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=True)
 
     if 0:  # options please!!!!
         tds2024.showFileSystem()
 
-    if 0:
-        acqD = {1: ('MEAN',)}
+    if 1:
+        acqD = {2: ('MEAN',)}
         tds2024.measLoop(acqD)
