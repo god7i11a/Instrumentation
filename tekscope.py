@@ -32,6 +32,14 @@ from struct import unpack
 from serial import Serial   # we don't need no steenkin' VISA
 from numpy import array
 
+try:
+    import usb.core
+    import usb.util
+except:
+    print 'No PyUSB'
+    raise
+    
+
 from plotter import ScopeDisplay
 
 # how long to sleep after issuing a write
@@ -375,8 +383,7 @@ class TektronixScope(object):
     4. could autostore data (tables best for this)
     """
     
-    def __init__(self, port=None, debug=False, horScale=None, horPos=None):
-        self._port = port
+    def __init__(self, debug=False, horScale=None, horPos=None):
         self._debug = debug
         self.connect()
         self.clear()
@@ -510,7 +517,8 @@ class TDS2024(TektronixScope):
     _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
 
     def __init__(self, port='/dev/ttyS0', **kwD):
-        super(TDS2024, self).__init__(port, kwD)
+        self._port = port
+        super(TDS2024, self).__init__(kwD)
 
     def connect(self):
         self.serial = Serial(self._port, 9600, timeout=None)
@@ -541,7 +549,136 @@ class TDS2024(TektronixScope):
             if cnt==0:  raise ValueError('Serial port did not return DCL! (%s)'%resp )
         self.serial.timeout=None
 
+class USBScope(TektronixScope):
+    """
 
+Bus 006 Device 003: ID 0699:03a6 Tektronix, Inc. 
+Device Descriptor:
+  bLength                18
+  bDescriptorType         1
+  bcdUSB               2.00
+  bDeviceClass            0 (Defined at Interface level)
+  bDeviceSubClass         0 
+  bDeviceProtocol         0 
+  bMaxPacketSize0        64
+  idVendor           0x0699 Tektronix, Inc.
+  idProduct          0x03a6 
+  bcdDevice            0.42
+  iManufacturer           1 Tektronix, Inc.
+  iProduct                2 Tektronix TDS2024C
+  iSerial                 3 C016676
+  bNumConfigurations      1
+  Configuration Descriptor:
+    bLength                 9
+    bDescriptorType         2
+    wTotalLength           39
+    bNumInterfaces          1
+    bConfigurationValue     1
+    iConfiguration          0 
+    bmAttributes         0xc0
+      Self Powered
+    MaxPower              100mA
+    Interface Descriptor:
+      bLength                 9
+      bDescriptorType         4
+      bInterfaceNumber        0
+      bAlternateSetting       0
+      bNumEndpoints           3
+      bInterfaceClass       254 Application Specific Interface
+      bInterfaceSubClass      3 Test and Measurement
+      bInterfaceProtocol      1 TMC
+      iInterface              0 
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x85  EP 5 IN
+        bmAttributes            2
+          Transfer Type            Bulk
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0040  1x 64 bytes
+        bInterval               0
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x06  EP 6 OUT
+        bmAttributes            2
+          Transfer Type            Bulk
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0040  1x 64 bytes
+        bInterval               0
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x87  EP 7 IN
+        bmAttributes            3
+          Transfer Type            Interrupt
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0040  1x 64 bytes
+        bInterval               8
+Device Status:     0x0000
+  (Bus Powered)
+
+    """
+    def __init__(self, **kwD):
+        super(USBScope, self).__init__(kwD)
+
+    def connect(self):
+        """
+        USB End of Message (EOM) Terminators. The EOM bit must be set in
+        the USB header of the last transfer of a command message. See the
+        USB Test and Measurement Class Specification (USBTMC) section
+        3.2.1 for details. The oscilloscope terminates messages by setting
+        the EOM bit in the USB header of the last transfer of a message to
+        the host (USBTMC Specification section 3.3.1), and by terminating
+        messages with a LF. White space is allowed before the terminator;
+        for example, CR LF is acceptable.
+        """
+        # find our device
+        dev = usb.core.find(idVendor=0x0699, idProduct=0x03a6)
+        
+        # was it found?
+        if dev is None:
+            raise ValueError('Device not found')
+        
+        # set the active configuration. With no arguments, the first
+        # configuration will be the active one
+        dev.set_configuration()
+        
+        # get an endpoint instance
+        cfg = dev.get_active_configuration()
+        intf = cfg[(0,0)]
+        
+        ep = usb.util.find_descriptor(
+            intf,
+            # match the first OUT endpoint
+            custom_match = lambda e: usb.util.endpoint_direction(e.bEndpointAddress) ==  usb.util.ENDPOINT_OUT
+        )
+        
+        assert ep is not None
+        
+        self.read = ep.read
+        self.readline = self._readline
+        self.write = ep.write
+
+    def _readline(self):
+        buf = ''
+        new = self.read(1)
+        while new !== '\n':
+            buf = buf+new
+            new=self.read(1)
+
+    def clear(self):
+        """
+        From a USB host, send an INITIATE_CLEAR followed by a
+        CHECK_CLEAR_STATUS. The USB interface responds to
+        CHECK_CLEAR_STATUS with STATUS_SUCCESS when it is
+        finished clearing the output queue.
+        """
+        print "Clear() not implemented"
+    
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
     tds2024 = TDS2024(debug=True)
