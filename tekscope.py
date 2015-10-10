@@ -399,7 +399,7 @@ class TektronixScope(object):
 
     def identify(self):
         sleep(sleeptime)
-        self.write('*IDN?\n')
+        self.write('*IDN?'+'\n')
         sleep(sleeptime)
         resp=self.readline()
         if resp == self._idStr:
@@ -622,8 +622,6 @@ Device Status:     0x0000
   (Bus Powered)
 
     """
-    def __init__(self, **kwD):
-        super(USBScope, self).__init__(kwD)
 
     def connect(self):
         """
@@ -666,7 +664,7 @@ Device Status:     0x0000
     def _readline(self):
         buf = ''
         new = self.read(1)
-        while new !== '\n':
+        while new != '\n':
             buf = buf+new
             new=self.read(1)
 
@@ -678,9 +676,10 @@ Device Status:     0x0000
         finished clearing the output queue.
         """
         print "Clear() not implemented"
-    
+
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
+
     tds2024 = TDS2024(debug=True)
     if 0:
         from pickle import dump, load
@@ -704,6 +703,6 @@ if __name__ == '__main__':
     if 0:  # options please!!!!
         tds2024.showFileSystem()
 
-    if 1:
+    if 0:
         acqD = {2: ('MEAN',)}
         tds2024.measLoop(acqD)
