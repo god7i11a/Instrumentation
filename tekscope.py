@@ -15,6 +15,7 @@
 # Version 0.3 -- 15 Feb 2015 added a TriggerControl class, could use some ugly-code-->gorgeous-code adjustments
 #                started tracking the trigger position in the plots. 
 #                Adding a HORizontal control. CH, DAT, and DIS to follow
+# Version 0.4 -- Added in a USB scope via linux kernel module usbtmc
 #
 #
 # adapated from : http://www.febo.com/geekworks/data-capture/tds-2012.html cf. https://gist.github.com/pklaus/320584 
@@ -32,13 +33,7 @@ from struct import unpack
 from serial import Serial   # we don't need no steenkin' VISA
 from numpy import array
 
-try:
-    import usb.core
-    import usb.util
-except:
-    print 'No PyUSB'
-    raise
-    
+import os
 
 from plotter import ScopeDisplay
 
@@ -402,8 +397,8 @@ class TektronixScope(object):
         self.write('*IDN?'+'\n')
         sleep(sleeptime)
         resp=self.readline()
-        if resp == self._idStr:
-            print resp
+        if resp.strip() == self._idStr:
+            print resp.strip()
         else:
             raise ValueError('Failed to get instrument id (%s)'%resp)
 
@@ -514,7 +509,7 @@ class TektronixScope(object):
     
         
 class TDS2024(TektronixScope):
-    _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04\n'
+    _idStr = 'TEKTRONIX,TDS 2024,0,CF:91.1CT FV:v4.12 TDS2CM:CMV:v1.04'
 
     def __init__(self, port='/dev/ttyS0', **kwD):
         self._port = port
@@ -622,8 +617,31 @@ Device Status:     0x0000
   (Bus Powered)
 
     """
-
+    _idStr = 'TEKTRONIX,TDS 2024C,C016676,CF:91.1CT FV:v24.17'
+    
     def connect(self):
+        self.usbtmc = os.open("/dev/usbtmc1", os.O_RDWR)
+        #instr = usbtmc.Instrument(idVendor=0x0699, idProduct=0x03a6)
+        self.write('HEADER on\n')
+
+    def write(self, data):
+        os.write(self.usbtmc, data)
+
+    def read(self, length = 4000):
+        return os.read(self.usbtmc, length)
+
+    def readline(self):
+        return self.read() #.strip() 
+
+    def _readline(self):
+        buf = ''
+        new = self.read(1)
+        while new != '\n':
+            buf = buf+new
+            new=self.read(1)
+        return buf
+
+    def usb(self):
         """
         USB End of Message (EOM) Terminators. The EOM bit must be set in
         the USB header of the last transfer of a command message. See the
@@ -634,6 +652,14 @@ Device Status:     0x0000
         messages with a LF. White space is allowed before the terminator;
         for example, CR LF is acceptable.
         """
+
+    try:
+        import usb.core
+        import usb.util
+    except:
+        print 'No PyUSB'
+        raise
+        
         # find our device
         dev = usb.core.find(idVendor=0x0699, idProduct=0x03a6)
         
@@ -661,13 +687,6 @@ Device Status:     0x0000
         self.readline = self._readline
         self.write = ep.write
 
-    def _readline(self):
-        buf = ''
-        new = self.read(1)
-        while new != '\n':
-            buf = buf+new
-            new=self.read(1)
-
     def clear(self):
         """
         From a USB host, send an INITIATE_CLEAR followed by a
@@ -680,7 +699,10 @@ Device Status:     0x0000
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
 
-    tds2024 = TDS2024(debug=True)
+    if 1:
+        tds2024 = TDS2024(debug=True)
+    else:
+        tds2024=USBScope(debug=True)
     if 0:
         from pickle import dump, load
         # can't pickle the instance. have to try grabbing only attributed ....
@@ -688,7 +710,7 @@ if __name__ == '__main__':
         tds2024.acquire(acqD )
         tds2024.dump()
 
-    if 0:
+    if 1:
         mT = ('FALL', 'RISE', 'PK2P', 'CRMS')
         mT= ('FALL', 'RISE', 'MINI', 'MAXI')
         #mT=('MEAN', )
@@ -696,7 +718,7 @@ if __name__ == '__main__':
         tds2024.setAcqState('RUN', stopAfter='RUNST')
         print tds2024.getTrigger(forceAcq=True)
         #acqD =  {4:mT, 3: mT, 2:mT, 1: mT}
-        acqD =  {1: mT, 2: mT}
+        acqD =  {1: mT}
         tds2024.acquire(acqD )
         ScopeDisplay(tds2024, idStr=TimeStamp, disp=True, save=True)
 
