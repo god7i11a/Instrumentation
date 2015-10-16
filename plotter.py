@@ -8,7 +8,10 @@ rc('font', family='monospace')  # LOOKs like a scope  ;-)
 use("TkAgg")
 
 from matplotlib.pyplot import plot, axis, xlabel, ylabel, gca, grid, text, show, figure, xticks, title, rcParams, savefig
-rcParams['savefig.directory'] = None  # use default
+try:
+    rcParams['savefig.directory'] = None  # use default
+except KeyError:
+    pass
 
 from numpy import arange
 
