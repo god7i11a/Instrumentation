@@ -619,8 +619,12 @@ Device Status:     0x0000
     """
     _idStr = 'TEKTRONIX,TDS 2024C,C016676,CF:91.1CT FV:v24.17'
     
+    def __init__(self, port='/dev/usbtmc0', **kwD):
+        self._port = port
+        super(USBScope, self).__init__(kwD)
+
     def connect(self):
-        self.usbtmc = os.open("/dev/usbtmc1", os.O_RDWR)
+        self.usbtmc = os.open(self._port, os.O_RDWR)
         #instr = usbtmc.Instrument(idVendor=0x0699, idProduct=0x03a6)
         self.write('HEADER on\n')
 
@@ -699,10 +703,10 @@ Device Status:     0x0000
 if __name__ == '__main__':
     TimeStamp =   datetime.datetime.now().isoformat().replace(':', '-').split('.')[0]
 
-    if 1:
+    if 0:
         tds2024 = TDS2024(debug=True)
     else:
-        tds2024=USBScope(debug=True)
+        tds2024=USBScope(port='/dev/usbtmc0', debug=True)
     if 0:
         from pickle import dump, load
         # can't pickle the instance. have to try grabbing only attributed ....
